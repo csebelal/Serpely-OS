@@ -2,14 +2,18 @@ import React, { useState } from 'react';
 import {
   Lock,
   Mail,
+  User,
   Eye,
   EyeOff,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react';
 import { UserRole, AuthUser } from '../../types';
 import {
-  authenticateCredentials
+  authenticateCredentials,
+  saveCustomUser,
+  RegisteredUserRecord
 } from '../../data/rbac-data';
 
 interface LoginViewProps {
@@ -21,41 +25,127 @@ interface LoginViewProps {
 export const LoginView: React.FC<LoginViewProps> = ({
   onLogin
 }) => {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('support@serpely.com');
   const [password, setPassword] = useState('123454321');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const toggleAuthMode = () => {
+    const nextMode = !isSignUp;
+    setIsSignUp(nextMode);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    if (nextMode) {
+      if (email === 'support@serpely.com') setEmail('');
+      if (password === '123454321') setPassword('');
+      setConfirmPassword('');
+    } else {
+      if (!email) setEmail('support@serpely.com');
+      if (!password) setPassword('123454321');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setSuccessMessage(null);
     setIsSubmitting(true);
 
     setTimeout(() => {
-      const authResult = authenticateCredentials(email, password);
+      if (isSignUp) {
+        // --- SIGN UP LOGIC ---
+        const cleanEmail = email.trim().toLowerCase();
+        const cleanPassword = password.trim();
 
-      if (!authResult.success || !authResult.user) {
-        setErrorMessage(
-          authResult.error ||
-            'Invalid credentials. Please verify your email and password.'
-        );
+        if (!cleanEmail) {
+          setErrorMessage('Please provide an email address.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (!cleanPassword) {
+          setErrorMessage('Please provide a password.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (cleanPassword.length < 6) {
+          setErrorMessage('Password must be at least 6 characters.');
+          setIsSubmitting(false);
+          return;
+        }
+        if (cleanPassword !== confirmPassword.trim()) {
+          setErrorMessage('Passwords do not match. Please re-type your password.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const initials = (name.trim() || cleanEmail)
+          .split(' ')
+          .map(w => w[0])
+          .slice(0, 2)
+          .join('')
+          .toUpperCase() || 'SU';
+
+        const newUser: RegisteredUserRecord = {
+          id: `usr-signup-${Date.now()}`,
+          name: name.trim() || 'Workspace Member',
+          email: cleanEmail,
+          password: cleanPassword,
+          role: 'owner',
+          title: 'Workspace Owner',
+          initials,
+          isCustom: true,
+          permissions: {
+            canManageSettings: true,
+            canManageApiKeys: true,
+            canApproveSpends: true,
+            canCreateAssets: true,
+            canPublishLive: true,
+            isReadOnly: false
+          }
+        };
+
+        saveCustomUser(newUser);
+
+        if (rememberMe) {
+          try {
+            localStorage.setItem('serpely_authenticated_user', JSON.stringify(newUser));
+            localStorage.setItem('serpely_active_role', newUser.role);
+          } catch {}
+        }
+
+        onLogin(newUser);
         setIsSubmitting(false);
-        return;
+      } else {
+        // --- SIGN IN LOGIC ---
+        const authResult = authenticateCredentials(email, password);
+
+        if (!authResult.success || !authResult.user) {
+          setErrorMessage(
+            authResult.error ||
+              'Invalid credentials. Please verify your email and password.'
+          );
+          setIsSubmitting(false);
+          return;
+        }
+
+        const authenticatedUser = authResult.user;
+
+        if (rememberMe) {
+          try {
+            localStorage.setItem('serpely_authenticated_user', JSON.stringify(authenticatedUser));
+            localStorage.setItem('serpely_active_role', authenticatedUser.role);
+          } catch {}
+        }
+
+        onLogin(authenticatedUser);
+        setIsSubmitting(false);
       }
-
-      const authenticatedUser = authResult.user;
-
-      if (rememberMe) {
-        try {
-          localStorage.setItem('serpely_authenticated_user', JSON.stringify(authenticatedUser));
-          localStorage.setItem('serpely_active_role', authenticatedUser.role);
-        } catch {}
-      }
-
-      onLogin(authenticatedUser);
-      setIsSubmitting(false);
     }, 380);
   };
 
@@ -262,8 +352,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Main Form Box Container */}
             <div className="relative z-10 w-full max-w-md mx-auto space-y-6">
               
-              {/* Top Row: Brand Monogram */}
-              <div className="flex items-center">
+              {/* Top Row: Brand Monogram on left + "Not a member? Sign up now" on right matching reference image */}
+              <div className="flex items-center justify-between">
                 {/* Sincly Brand Monogram Pill matching reference UI */}
                 <div className="flex items-center gap-2.5">
                   <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/25">
@@ -273,16 +363,32 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     SINCLY <span className="text-[10px] text-emerald-600 font-mono font-bold">OS</span>
                   </span>
                 </div>
+
+                {/* Sign up / Sign in toggle pill button in top right matching reference image */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-neutral-500 font-medium hidden sm:inline">
+                    {isSignUp ? 'Already a member?' : 'Not a member?'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={toggleAuthMode}
+                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                  >
+                    {isSignUp ? 'Sign in' : 'Sign up now'}
+                  </button>
+                </div>
               </div>
 
               {/* Headings */}
               <div className="space-y-1.5 pt-2">
                 <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-900 tracking-tight flex items-baseline">
-                  <span>Sign in Now</span>
+                  <span>{isSignUp ? 'Sign up Now' : 'Sign in Now'}</span>
                   <span className="text-emerald-500 text-4xl">.</span>
                 </h2>
                 <p className="text-xs sm:text-sm text-neutral-400 font-medium">
-                  Enter your detail below
+                  {isSignUp
+                    ? 'Create your Sincly workspace account below'
+                    : 'Enter your detail below'}
                 </p>
               </div>
 
@@ -294,10 +400,40 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
               )}
 
-              {/* Login Form */}
+              {/* Success Message Alert */}
+              {successMessage && (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-start gap-2.5 shadow-xs">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
+                  <span>{successMessage}</span>
+                </div>
+              )}
+
+              {/* Authentication Form */}
               <form onSubmit={handleSubmit} className="space-y-4 pt-1">
                 
-                {/* 1. Username or Email Input Field matching reference image card */}
+                {/* 1. Full Name Field (Sign Up Mode Only) */}
+                {isSignUp && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-neutral-700">
+                      Full Name
+                    </label>
+                    <div className="relative flex items-center rounded-2xl bg-white border border-neutral-200/90 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+                      <div className="pl-4 pr-2 text-neutral-400">
+                        <User className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        placeholder="e.g. Belal Hossain"
+                        className="w-full py-3.5 pr-4 text-xs font-sans text-neutral-900 placeholder:text-neutral-300 bg-transparent focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Username or Email Input Field matching reference image card */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-neutral-700">
                     Username or Email
@@ -317,7 +453,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </div>
                 </div>
 
-                {/* 2. Password Input Field matching reference image card */}
+                {/* 3. Password Input Field matching reference image card */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-neutral-700">
                     Password
@@ -348,6 +484,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </div>
                 </div>
 
+                {/* 4. Confirm Password (Sign Up Mode Only) */}
+                {isSignUp && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-neutral-700">
+                      Confirm Password
+                    </label>
+                    <div className="relative flex items-center rounded-2xl bg-white border border-neutral-200/90 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+                      <div className="pl-4 pr-2 text-neutral-400">
+                        <Lock className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        placeholder="Re-enter password"
+                        className="w-full py-3.5 pr-4 text-xs font-mono text-neutral-900 placeholder:text-neutral-300 bg-transparent focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Remember Me Checkbox */}
                 <div className="flex items-center gap-2 pt-1">
                   <input
@@ -363,7 +521,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
 
                 {/* CTA Submit Button (Styled matching the reference image's pill button) */}
-                <div className="pt-2">
+                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <button
                     type="submit"
                     disabled={isSubmitting}
@@ -372,13 +530,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     {isSubmitting ? (
                       <>
                         <Sparkles className="h-4 w-4 animate-spin text-white" />
-                        <span>Signing in...</span>
+                        <span>{isSignUp ? 'Creating account...' : 'Signing in...'}</span>
                       </>
                     ) : (
                       <>
-                        <span>Sign in</span>
+                        <span>{isSignUp ? 'Sign up' : 'Sign in'}</span>
                       </>
                     )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={toggleAuthMode}
+                    className="text-xs text-neutral-500 hover:text-emerald-700 font-medium transition-colors text-center sm:text-right"
+                  >
+                    {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up now"}
                   </button>
                 </div>
               </form>
