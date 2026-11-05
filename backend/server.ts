@@ -2707,6 +2707,8 @@ async function startServer() {
       facebookClientSecret,
       linkedinClientId,
       linkedinClientSecret,
+      linkedinPersonalClientId,
+      linkedinPersonalClientSecret,
       googleClientId,
       googleClientSecret,
       youtubeApiKey,
@@ -2720,6 +2722,8 @@ async function startServer() {
     if (facebookClientSecret !== undefined) updates.FACEBOOK_CLIENT_SECRET = String(facebookClientSecret).trim();
     if (linkedinClientId !== undefined) updates.LINKEDIN_CLIENT_ID = String(linkedinClientId).trim();
     if (linkedinClientSecret !== undefined) updates.LINKEDIN_CLIENT_SECRET = String(linkedinClientSecret).trim();
+    if (linkedinPersonalClientId !== undefined) updates.LINKEDIN_PERSONAL_CLIENT_ID = String(linkedinPersonalClientId).trim();
+    if (linkedinPersonalClientSecret !== undefined) updates.LINKEDIN_PERSONAL_CLIENT_SECRET = String(linkedinPersonalClientSecret).trim();
     if (googleClientId !== undefined) updates.GOOGLE_CLIENT_ID = String(googleClientId).trim();
     if (googleClientSecret !== undefined) updates.GOOGLE_CLIENT_SECRET = String(googleClientSecret).trim();
     if (youtubeApiKey !== undefined) updates.YOUTUBE_API_KEY = String(youtubeApiKey).trim();
@@ -2735,6 +2739,8 @@ async function startServer() {
     if (facebookClientSecret !== undefined) creds.facebookClientSecret = String(facebookClientSecret).trim();
     if (linkedinClientId !== undefined) creds.linkedinClientId = String(linkedinClientId).trim();
     if (linkedinClientSecret !== undefined) creds.linkedinClientSecret = String(linkedinClientSecret).trim();
+    if (linkedinPersonalClientId !== undefined) creds.linkedinPersonalClientId = String(linkedinPersonalClientId).trim();
+    if (linkedinPersonalClientSecret !== undefined) creds.linkedinPersonalClientSecret = String(linkedinPersonalClientSecret).trim();
     if (googleClientId !== undefined) creds.googleClientId = String(googleClientId).trim();
     if (googleClientSecret !== undefined) creds.googleClientSecret = String(googleClientSecret).trim();
     if (youtubeApiKey !== undefined) creds.youtubeApiKey = String(youtubeApiKey).trim();
