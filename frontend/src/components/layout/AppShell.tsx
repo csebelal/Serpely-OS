@@ -239,8 +239,11 @@ export const AppShell: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    if (window.location.pathname === '' || window.location.pathname === '/') {
-      window.history.replaceState({ isLogin: true }, '', '/login');
+    const saved = localStorage.getItem('serpely_authenticated_user');
+    if (window.location.pathname === '' || window.location.pathname === '/' || !saved) {
+      if (window.location.pathname !== '/login') {
+        window.history.replaceState({ isLogin: true }, '', '/login');
+      }
       setIsAuthScreenOpen(true);
     }
 
@@ -793,6 +796,17 @@ export const AppShell: React.FC = () => {
     }
   };
 
+  // When authentication screen is open, return LoginView directly with ZERO dashboard mounting or flicker
+  if (isAuthScreenOpen) {
+    return (
+      <LoginView
+        currentRole={currentUser.role}
+        onLogin={handleLogin}
+        onCancel={handleCloseLogin}
+      />
+    );
+  }
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-neutral-950 font-sans text-neutral-100 lg:p-3 lg:gap-3">
       {/* Desktop Floating Sidebar */}
@@ -956,25 +970,6 @@ export const AppShell: React.FC = () => {
               <CheckCircle2 className="h-3.5 w-3.5" />
             </motion.span>
             <span>{toastMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Full-Screen Login & RBAC Portal */}
-      <AnimatePresence>
-        {isAuthScreenOpen && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[100] bg-neutral-950 overflow-y-auto"
-          >
-            <LoginView
-              currentRole={currentUser.role}
-              onLogin={handleLogin}
-              onCancel={handleCloseLogin}
-            />
           </motion.div>
         )}
       </AnimatePresence>
