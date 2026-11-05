@@ -5,17 +5,10 @@ import {
   Eye,
   EyeOff,
   Sparkles,
-  ArrowRight,
-  UserCheck,
-  AlertCircle,
-  KeyRound,
-  ShieldCheck,
-  Check
+  AlertCircle
 } from 'lucide-react';
 import { UserRole, AuthUser } from '../../types';
 import {
-  DEFAULT_ADMIN_USER,
-  DEFAULT_ADMIN_PASSWORD,
   authenticateCredentials
 } from '../../data/rbac-data';
 
@@ -26,8 +19,7 @@ interface LoginViewProps {
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
-  onLogin,
-  onCancel
+  onLogin
 }) => {
   const [email, setEmail] = useState('support@serpely.com');
   const [password, setPassword] = useState('123454321');
@@ -35,12 +27,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const handleFillDefaultAdmin = () => {
-    setEmail(DEFAULT_ADMIN_USER.email);
-    setPassword(DEFAULT_ADMIN_PASSWORD);
-    setErrorMessage(null);
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +39,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       if (!authResult.success || !authResult.user) {
         setErrorMessage(
           authResult.error ||
-            'Invalid credentials. Default full-access login is support@serpely.com with password 123454321.'
+            'Invalid credentials. Please verify your email and password.'
         );
         setIsSubmitting(false);
         return;
@@ -276,8 +262,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Main Form Box Container */}
             <div className="relative z-10 w-full max-w-md mx-auto space-y-6">
               
-              {/* Top Row: Brand Monogram / Cancel Return */}
-              <div className="flex items-center justify-between">
+              {/* Top Row: Brand Monogram */}
+              <div className="flex items-center">
                 {/* Sincly Brand Monogram Pill matching reference UI */}
                 <div className="flex items-center gap-2.5">
                   <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/25">
@@ -287,15 +273,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     SINCLY <span className="text-[10px] text-emerald-600 font-mono font-bold">OS</span>
                   </span>
                 </div>
-
-                {onCancel && (
-                  <button
-                    onClick={onCancel}
-                    className="text-xs text-neutral-400 hover:text-neutral-700 font-semibold transition-colors"
-                  >
-                    Return to Workspace
-                  </button>
-                )}
               </div>
 
               {/* Headings */}
@@ -307,23 +284,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 <p className="text-xs sm:text-sm text-neutral-400 font-medium">
                   Enter your detail below
                 </p>
-              </div>
-
-              {/* Default Full-Access Credentials Hint Card */}
-              <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-xs flex items-center justify-between shadow-xs">
-                <div className="flex items-center gap-2 text-emerald-900 font-medium text-[11px]">
-                  <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <span>
-                    Default Admin: <strong className="font-mono text-emerald-950 font-bold">support@serpely.com</strong>
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleFillDefaultAdmin}
-                  className="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] transition-colors shrink-0 shadow-xs cursor-pointer"
-                >
-                  Auto-fill
-                </button>
               </div>
 
               {/* Error Message Alert */}
@@ -359,18 +319,9 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                 {/* 2. Password Input Field matching reference image card */}
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <label className="font-bold text-neutral-700">
-                      Password
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleFillDefaultAdmin}
-                      className="text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline cursor-pointer"
-                    >
-                      Default: 123454321
-                    </button>
-                  </div>
+                  <label className="block text-xs font-bold text-neutral-700">
+                    Password
+                  </label>
                   <div className="relative flex items-center rounded-2xl bg-white border border-neutral-200/90 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
                     <div className="pl-4 pr-2 text-neutral-400">
                       <Lock className="h-4 w-4 text-emerald-600" />
@@ -407,7 +358,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     className="h-4 w-4 rounded-md border-neutral-300 text-emerald-600 focus:ring-emerald-500/30 cursor-pointer"
                   />
                   <label htmlFor="rememberSession" className="text-xs text-neutral-500 font-medium cursor-pointer select-none">
-                    Keep session active in local storage
+                    Remember me
                   </label>
                 </div>
 
@@ -431,19 +382,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </button>
                 </div>
               </form>
-
-              {/* Subtle Trust & Security Footer */}
-              <div className="pt-4 flex items-center gap-4 text-[11px] text-neutral-400 font-medium">
-                <span className="flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  RBAC Enforced
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <Lock className="h-3.5 w-3.5 text-emerald-600" />
-                  Full-Access Session
-                </span>
-              </div>
             </div>
           </div>
 
