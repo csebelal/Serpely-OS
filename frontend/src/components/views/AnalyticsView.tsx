@@ -198,9 +198,9 @@ const REAL_LINKEDIN_DEMOGRAPHICS = {
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   onNavigate,
   onOpenCommand: _onOpenCommand,
-  pagePosts = mockPageSocialPosts,
+  pagePosts = [],
   onUpdatePagePosts,
-  leadsList = mockLeads,
+  leadsList = [],
   onUpdateLeads,
   geoScore = mockGeoScore,
   brandProfile = mockBrandProfile,

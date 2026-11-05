@@ -41,11 +41,22 @@ interface MarketingHubViewProps {
   onStateSynced?: (state: any) => void;
 }
 
+const defaultEmptyBrandProfile: BrandProfile = {
+  name: '',
+  website: '',
+  industry: '',
+  description: '',
+  voiceTone: 'Professional, Engaging & Authoritative',
+  targetAudience: '',
+  keyThemes: [],
+  brandColors: ['#10b981', '#064e3b', '#0f172a']
+};
+
 export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
-  brandProfile = mockBrandProfile,
-  memoriesList = mockMemories,
-  campaignsList = mockCampaigns,
-  contentList = mockContentList,
+  brandProfile = defaultEmptyBrandProfile,
+  memoriesList = [],
+  campaignsList = [],
+  contentList = [],
   onUpdateBrandProfile,
   onStateSynced
 }) => {

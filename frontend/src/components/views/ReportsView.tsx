@@ -17,7 +17,7 @@ interface ReportsViewProps {
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({
-  reportsList = mockReports,
+  reportsList = [],
   onUpdateReports,
   brandName = 'Serpely AI',
   geoScore = 88

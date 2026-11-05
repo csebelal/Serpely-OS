@@ -146,12 +146,12 @@ const AVAILABLE_ACTIONS = [
 ];
 
 export const AutomationView: React.FC<AutomationViewProps> = ({
-  automationsList = mockAutomations,
+  automationsList = [],
   onUpdateAutomations,
   onStateSynced
 }) => {
   const [automations, setAutomations] = useState<AutomationRule[]>(
-    automationsList && automationsList.length > 0 ? automationsList : mockAutomations
+    automationsList || []
   );
   const [categoryFilter, setCategoryFilter] = useState<TriggerCategory>('All');
   const [searchQuery, setSearchQuery] = useState('');

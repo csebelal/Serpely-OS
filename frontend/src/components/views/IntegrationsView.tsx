@@ -140,8 +140,19 @@ interface LiveStatusResponse {
   };
 }
 
+const defaultCleanIntegrations: IntegrationItem[] = [
+  { id: 'int-gemini', name: 'Google Gemini 2.5 Pro', category: 'ai', status: 'connected', description: 'Core LLM Engine for autonomous marketing orchestration', icon: 'Sparkles', lastSync: 'Active System Engine' },
+  { id: 'int-linkedin', name: 'LinkedIn Marketing Platform', category: 'social', status: 'disconnected', description: 'Publish and schedule executive content and company updates', icon: 'Linkedin', lastSync: 'Never' },
+  { id: 'int-meta', name: 'Meta (Facebook & Instagram)', category: 'social', status: 'disconnected', description: 'Publish feeds, reels, and stories with Graph API', icon: 'Facebook', lastSync: 'Never' },
+  { id: 'int-google', name: 'Google / YouTube & Ads', category: 'analytics', status: 'disconnected', description: 'Track YouTube channel analytics and PPC search campaigns', icon: 'Youtube', lastSync: 'Never' },
+  { id: 'int-hubspot', name: 'HubSpot CRM', category: 'crm', status: 'disconnected', description: 'Synchronize leads, contacts, and deal pipelines', icon: 'Layers', lastSync: 'Never' },
+  { id: 'int-smtp', name: 'Custom SMTP Mailer', category: 'email', status: 'disconnected', description: 'Send automated email drip campaigns with custom SMTP', icon: 'Mail', lastSync: 'Never' },
+  { id: 'int-elevenlabs', name: 'ElevenLabs Voice AI', category: 'ai', status: 'disconnected', description: 'Synthesize studio-quality voiceovers and audio podcasts', icon: 'Mic', lastSync: 'Never' },
+  { id: 'int-heygen', name: 'HeyGen Video Avatars', category: 'ai', status: 'disconnected', description: 'Render photorealistic AI spokesperson video avatars', icon: 'Video', lastSync: 'Never' }
+];
+
 export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
-  integrationsList = mockIntegrations,
+  integrationsList = defaultCleanIntegrations,
   onUpdateIntegrations,
   onStateSynced,
   onNavigate,

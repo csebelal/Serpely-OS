@@ -179,24 +179,40 @@ export const AppShell: React.FC = () => {
   };
 
   // Core persistent workspace state across all 18 views
-  const [brandProfile, setBrandProfile] = useState<BrandProfile>(mockBrandProfile);
+  const [brandProfile, setBrandProfile] = useState<BrandProfile>({
+    name: 'My Workspace',
+    website: '',
+    industry: '',
+    description: '',
+    voiceTone: 'Professional, Engaging & Authoritative',
+    targetAudience: '',
+    keyThemes: [],
+    brandColors: ['#10b981', '#064e3b', '#0f172a']
+  });
   const [agents, setAgents] = useState<AgentInfo[]>(mockAgents);
-  const [approvals, setApprovals] = useState<ApprovalItem[]>(mockApprovals);
-  const [geoScore, setGeoScore] = useState<GeoScoreData>(mockGeoScore);
-  const [campaigns, setCampaigns] = useState<CampaignItem[]>(mockCampaigns);
-  const [contentList, setContentList] = useState<ContentItem[]>(mockContentList);
-  const [socialPosts, setSocialPosts] = useState<SocialPost[]>(mockSocialCalendar);
-  const [leads, setLeads] = useState<LeadItem[]>(mockLeads);
-  const [communityMessages, setCommunityMessages] = useState<CommunityMessage[]>(mockCommunityMessages);
-  const [automations, setAutomations] = useState<AutomationRule[]>(mockAutomations);
-  const [integrations, setIntegrations] = useState<IntegrationItem[]>(mockIntegrations);
-  const [memories, setMemories] = useState<MemoryItem[]>(mockMemories);
-  const [connectedPages, setConnectedPages] = useState<ConnectedSocialPage[]>(
-    mockConnectedSocialPages
-  );
-  const [pagePosts, setPagePosts] = useState<PageSocialPost[]>(mockPageSocialPosts);
-  const [reports, setReports] = useState<ReportItem[]>(mockReports);
-  const [meetings, setMeetings] = useState<MeetingItem[]>(mockMeetings);
+  const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
+  const [geoScore, setGeoScore] = useState<GeoScoreData>({ overallScore: 0, breakdowns: [] });
+  const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
+  const [contentList, setContentList] = useState<ContentItem[]>([]);
+  const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+  const [leads, setLeads] = useState<LeadItem[]>([]);
+  const [communityMessages, setCommunityMessages] = useState<CommunityMessage[]>([]);
+  const [automations, setAutomations] = useState<AutomationRule[]>([]);
+  const [integrations, setIntegrations] = useState<IntegrationItem[]>([
+    { id: 'int-gemini', name: 'Google Gemini 2.5 Pro', category: 'ai', status: 'connected', description: 'Core LLM Engine for autonomous marketing orchestration', icon: 'Sparkles', lastSync: 'Active System Engine' },
+    { id: 'int-linkedin', name: 'LinkedIn Marketing Platform', category: 'social', status: 'disconnected', description: 'Publish and schedule executive content and company updates', icon: 'Linkedin', lastSync: 'Never' },
+    { id: 'int-meta', name: 'Meta (Facebook & Instagram)', category: 'social', status: 'disconnected', description: 'Publish feeds, reels, and stories with Graph API', icon: 'Facebook', lastSync: 'Never' },
+    { id: 'int-google', name: 'Google / YouTube & Ads', category: 'analytics', status: 'disconnected', description: 'Track YouTube channel analytics and PPC search campaigns', icon: 'Youtube', lastSync: 'Never' },
+    { id: 'int-hubspot', name: 'HubSpot CRM', category: 'crm', status: 'disconnected', description: 'Synchronize leads, contacts, and deal pipelines', icon: 'Layers', lastSync: 'Never' },
+    { id: 'int-smtp', name: 'Custom SMTP Mailer', category: 'email', status: 'disconnected', description: 'Send automated email drip campaigns with custom SMTP', icon: 'Mail', lastSync: 'Never' },
+    { id: 'int-elevenlabs', name: 'ElevenLabs Voice AI', category: 'ai', status: 'disconnected', description: 'Synthesize studio-quality voiceovers and audio podcasts', icon: 'Mic', lastSync: 'Never' },
+    { id: 'int-heygen', name: 'HeyGen Video Avatars', category: 'ai', status: 'disconnected', description: 'Render photorealistic AI spokesperson video avatars', icon: 'Video', lastSync: 'Never' }
+  ]);
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
+  const [connectedPages, setConnectedPages] = useState<ConnectedSocialPage[]>([]);
+  const [pagePosts, setPagePosts] = useState<PageSocialPost[]>([]);
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [meetings, setMeetings] = useState<MeetingItem[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isHydrating, setIsHydrating] = useState<boolean>(true);
 

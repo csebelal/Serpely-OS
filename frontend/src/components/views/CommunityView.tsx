@@ -36,7 +36,7 @@ interface CommunityViewProps {
 export const CommunityView: React.FC<CommunityViewProps> = ({
   onNavigate,
   onSubmitApproval,
-  messagesList = mockCommunityMessages,
+  messagesList = [],
   onUpdateMessages,
   brandName = 'Brand',
   onStateSynced,

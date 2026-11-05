@@ -193,95 +193,62 @@ const LEGACY_JSON_DB_PATH = path.join(DATA_DIR, 'marketing-os-db.json');
 
 function createInitialDb() {
   return {
-    brandProfile: structuredClone(mockBrandProfile),
+    brandProfile: {
+      name: 'My Workspace',
+      website: '',
+      industry: 'Technology',
+      description: 'Autonomous AI Growth & Marketing Workspace',
+      voiceTone: 'Professional, Authoritative & Engaging',
+      targetAudience: 'Global Audience',
+      keyThemes: [],
+      brandColors: ['#10b981', '#064e3b', '#0f172a']
+    },
     agents: structuredClone(mockAgents),
-    approvals: structuredClone(mockApprovals),
-    geoScore: structuredClone(mockGeoScore),
-    campaigns: structuredClone(mockCampaigns),
-    contentList: structuredClone(mockContentList),
-    socialPosts: structuredClone(mockSocialCalendar),
+    approvals: [] as ApprovalItem[],
+    geoScore: { overallScore: 0, breakdowns: [] } as GeoScoreData,
+    campaigns: [] as CampaignItem[],
+    contentList: [] as ContentItem[],
+    socialPosts: [] as SocialPost[],
     ads: [],
-    emailCampaigns: structuredClone(mockEmailCampaigns),
-    emailSequences: structuredClone(mockEmailSequences),
-    leads: structuredClone(mockLeads),
-    communityMessages: structuredClone(mockCommunityMessages),
-    automations: structuredClone(mockAutomations),
-    integrations: structuredClone(mockIntegrations),
-    memories: structuredClone(mockMemories),
-    connectedPages: structuredClone(mockConnectedSocialPages),
-    pagePosts: structuredClone(mockPageSocialPosts),
-    reports: structuredClone(mockReports),
-    scheduledQueue: [
-      {
-        id: 'sched-threads-01',
-        platform: 'Threads',
-        pageId: 'page-th-techsheba',
-        pageName: 'Tech Sheba (Official Threads)',
-        pageHandle: '@techsheba_official',
-        content: `What is the #1 mistake you see growing engineering teams make when setting up enterprise server redundancy?\n\nIn our audits across 40+ organizations, 68% have backups configured but haven't run a simulated restore test in over 6 months.\n\nDrop your thoughts below 👇 #devops #tech #infrastructure`,
-        scheduledTimestamp: Date.now() + 2 * 3600 * 1000,
-        scheduledTimeFormatted: 'Today at 3:30 PM (Peak Conversational Window)',
-        dayOfWeek: 'Wednesday',
-        status: 'scheduled',
-        createdAt: '1 hour ago',
-        connectorType: 'threads_graph_api',
-        retriesCount: 0,
-        maxRetries: 3,
-        tags: ['#infrastructure', '#devops', '#tech'],
-        viralityScore: 92,
-        targetAudience: 'Meta Threads Builder & Tech Community'
-      },
-      {
-        id: 'sched-bluesky-02',
-        platform: 'Bluesky',
-        pageId: 'page-bsky-techsheba',
-        pageName: 'Tech Sheba (AT Protocol)',
-        pageHandle: '@techsheba.bsky.social',
-        content: `Why decentralized social networks are the future of tech brand authenticity:\n\n1. You own your identity (DID & handles)\n2. No black-box algorithmic shadowbanning\n3. Open ATProto feeds for custom developer curation\n\nAre you building open web feeds yet? 🦋 #atproto #bluesky #openweb`,
-        scheduledTimestamp: Date.now() + 24 * 3600 * 1000,
-        scheduledTimeFormatted: 'Tomorrow at 11:15 AM (ATProto Discovery Window)',
-        dayOfWeek: 'Thursday',
-        status: 'scheduled',
-        createdAt: '2 hours ago',
-        connectorType: 'bluesky_atproto',
-        retriesCount: 0,
-        maxRetries: 3,
-        tags: ['#atproto', '#bluesky', '#openweb'],
-        viralityScore: 88,
-        targetAudience: 'Decentralized ATProto & Developer Community'
-      },
-      {
-        id: 'sched-tiktok-03',
-        platform: 'TikTok',
-        pageId: 'page-tiktok-techsheba',
-        pageName: 'Tech Sheba Tech Clips',
-        pageHandle: '@techsheba_tech',
-        content: `3 IT security red flags that hackers look for in your office network 🚩\n\n1. Default router admin passwords\n2. Unsegmented guest WiFi\n3. Unpatched firmware on network switches\n\nSave this video before your next network upgrade! #techhacks #cybersecurity #networking`,
-        scheduledTimestamp: Date.now() + 30 * 3600 * 1000,
-        scheduledTimeFormatted: 'Tomorrow at 8:00 PM (TikTok Viral Sound Wave)',
-        dayOfWeek: 'Thursday',
-        status: 'scheduled',
-        createdAt: '3 hours ago',
-        connectorType: 'tiktok_posting_api',
-        retriesCount: 0,
-        maxRetries: 3,
-        tags: ['#techhacks', '#cybersecurity', '#networking'],
-        viralityScore: 95,
-        targetAudience: 'TikTok Tech Enthusiasts & IT Admins'
-      }
-    ] as ScheduledSocialPost[],
+    emailCampaigns: [] as EmailCampaign[],
+    emailSequences: [] as EmailSequence[],
+    leads: [] as LeadItem[],
+    communityMessages: [] as CommunityMessage[],
+    automations: [] as AutomationRule[],
+    integrations: [
+      { id: 'int-gemini', name: 'Google Gemini 2.5 Pro', category: 'ai', status: 'connected', description: 'Core LLM Engine for autonomous marketing orchestration', icon: 'Sparkles', lastSync: 'Active System Engine' },
+      { id: 'int-linkedin', name: 'LinkedIn Marketing Platform', category: 'social', status: 'disconnected', description: 'Publish and schedule executive content and company updates', icon: 'Linkedin', lastSync: 'Never' },
+      { id: 'int-meta', name: 'Meta (Facebook & Instagram)', category: 'social', status: 'disconnected', description: 'Publish feeds, reels, and stories with Graph API', icon: 'Facebook', lastSync: 'Never' },
+      { id: 'int-google', name: 'Google / YouTube & Ads', category: 'analytics', status: 'disconnected', description: 'Track YouTube channel analytics and PPC search campaigns', icon: 'Youtube', lastSync: 'Never' },
+      { id: 'int-hubspot', name: 'HubSpot CRM', category: 'crm', status: 'disconnected', description: 'Synchronize leads, contacts, and deal pipelines', icon: 'Layers', lastSync: 'Never' },
+      { id: 'int-smtp', name: 'Custom SMTP Mailer', category: 'email', status: 'disconnected', description: 'Send automated email drip campaigns with custom SMTP', icon: 'Mail', lastSync: 'Never' },
+      { id: 'int-elevenlabs', name: 'ElevenLabs Voice AI', category: 'ai', status: 'disconnected', description: 'Synthesize studio-quality voiceovers and audio podcasts', icon: 'Mic', lastSync: 'Never' },
+      { id: 'int-heygen', name: 'HeyGen Video Avatars', category: 'ai', status: 'disconnected', description: 'Render photorealistic AI spokesperson video avatars', icon: 'Video', lastSync: 'Never' }
+    ] as IntegrationItem[],
+    memories: [] as MemoryItem[],
+    connectedPages: [] as ConnectedSocialPage[],
+    pagePosts: [] as PageSocialPost[],
+    reports: [] as ReportItem[],
+    scheduledQueue: [] as ScheduledSocialPost[],
     webhookConfig: {
-      enabled: true,
-      secretToken: process.env.SINCLY_WEBHOOK_SECRET || 'snc_wh_sec_9a7b3c2d',
+      enabled: false,
+      secretToken: '',
       requireSecret: false,
       routingMode: 'smart_queue',
-      targetPlatforms: ['LinkedIn', 'Facebook', 'Instagram', 'X'],
+      targetPlatforms: ['LinkedIn', 'Facebook', 'Instagram'],
       autoGenerateVisuals: true,
-      brandTone: 'Executive Authority & High Conversion'
+      brandTone: 'Professional'
     } as WebhookHubConfig,
     webhookLogs: [] as WebhookLogEntry[],
-    meetings: structuredClone(mockMeetings) as MeetingItem[],
-    messagingConfig: structuredClone(mockMessagingConfig) as MessagingConfig,
+    meetings: [] as MeetingItem[],
+    messagingConfig: {
+      slackWebhookUrl: '',
+      discordWebhookUrl: '',
+      notifyOnApprovalPending: true,
+      notifyOnCampaignLaunched: true,
+      notifyOnMeetingBooked: true,
+      notifyOnLeadAlert: true
+    } as MessagingConfig,
     oauthSessions: {
       facebook: {
         connected: false,
@@ -302,19 +269,16 @@ function createInitialDb() {
         accessToken: process.env.HUBSPOT_ACCESS_TOKEN || ''
       } as StoredHubSpotSession,
       smtp: {
-        configured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
+        configured: false,
         verified: false,
-        host: process.env.SMTP_HOST || mockDefaultSmtpConfig.host,
-        port: Number(process.env.SMTP_PORT || mockDefaultSmtpConfig.port),
-        secure:
-          process.env.SMTP_SECURE === 'true' ||
-          Number(process.env.SMTP_PORT) === 465 ||
-          mockDefaultSmtpConfig.secure,
-        user: process.env.SMTP_USER || mockDefaultSmtpConfig.user,
-        pass: process.env.SMTP_PASS || '',
-        fromName: process.env.SMTP_FROM_NAME || mockDefaultSmtpConfig.fromName,
-        fromEmail: process.env.SMTP_FROM_EMAIL || mockDefaultSmtpConfig.fromEmail,
-        replyTo: process.env.SMTP_REPLY_TO || mockDefaultSmtpConfig.replyTo
+        host: '',
+        port: 587,
+        secure: false,
+        user: '',
+        pass: '',
+        fromName: '',
+        fromEmail: '',
+        replyTo: ''
       } as StoredSmtpSession,
       credentials: {} as StoredLiveCredentials
     }
@@ -522,6 +486,20 @@ async function startServer() {
   // Hydrate workspace directly from server-side SQL database (auto-migrating legacy JSON once if present)
   let db = await initPrimarySqlDatabase(createInitialDb(), LEGACY_JSON_DB_PATH);
 
+  // Check if workspace contains legacy mock data or if FRESH_WORKSPACE is requested
+  const hasLegacyMock = (
+    (db.campaigns || []).some((c: any) => c.id === 'cmp-alpha' || c.name?.includes('Scale AI')) ||
+    (db.leads || []).some((l: any) => l.name === 'Sarah Jenkins' || l.name === 'Marcus Vance') ||
+    (db.connectedPages || []).some((p: any) => p.pageName?.includes('Tech Sheba') || p.id === 'page-li-techsheba') ||
+    (db.brandProfile?.name === 'Tech Sheba' || db.brandProfile?.name === 'Serpely AI')
+  );
+
+  if (hasLegacyMock || process.env.FRESH_WORKSPACE === 'true') {
+    console.log('[Workspace] Purging legacy demo/mock data and initializing clean fresh workspace...');
+    db = createInitialDb();
+    await syncWorkspaceToSql(db);
+  }
+
   // Clean up any legacy demo/mock scraped posts so real posts persist cleanly
   if (Array.isArray(db.pagePosts)) {
     db.pagePosts = db.pagePosts
@@ -571,17 +549,17 @@ async function startServer() {
     db.connectedPages = db.connectedPages.filter(p => p.id !== 'page-li-org-serpely-ai');
   }
   if (!Array.isArray(db.automations)) {
-    db.automations = structuredClone(mockAutomations);
+    db.automations = [];
   }
 
   // Ensure scheduledQueue exists on db
   if (!Array.isArray((db as any).scheduledQueue)) {
-    (db as any).scheduledQueue = structuredClone(createInitialDb().scheduledQueue);
+    (db as any).scheduledQueue = [];
   }
 
   // Ensure meetings and messagingConfig exist on db
   if (!Array.isArray((db as any).meetings)) {
-    (db as any).meetings = structuredClone(mockMeetings);
+    (db as any).meetings = [];
   }
   if (!(db as any).messagingConfig) {
     (db as any).messagingConfig = structuredClone(mockMessagingConfig);

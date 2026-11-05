@@ -50,7 +50,7 @@ Elena Rostova,Kinetix AI,Head of Demand Gen,elena@kinetix.ai,Contact Form,"Evalu
 
 export const LeadsView: React.FC<LeadsViewProps> = ({
   onNavigate,
-  leadsList = mockLeads,
+  leadsList = [],
   brandName = 'Brand',
   onShowToast,
   onUpdateLeads,
