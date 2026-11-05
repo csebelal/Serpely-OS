@@ -171,14 +171,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <div className="absolute -top-6 right-8 sm:right-16 w-24 h-24 rounded-full bg-gradient-to-br from-pink-300 to-rose-200/90 shadow-lg shadow-pink-300/30 blur-[0.5px] pointer-events-none z-0" />
 
               <div className="relative z-10 space-y-3">
-                <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-neutral-900 tracking-tight leading-[1.12]">
+                <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-[#0f172a] tracking-tight leading-[1.12]">
                   The World Most <br />
-                  <span className="text-neutral-900">Powerful </span>
+                  <span className="text-[#0f172a]">Powerful </span>
                   <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">
                     Marketing OS.
                   </span>
                 </h1>
-                <p className="text-sm sm:text-base text-neutral-500 font-medium max-w-md leading-relaxed">
+                <p className="text-sm sm:text-base text-[#64748b] font-medium max-w-md leading-relaxed">
                   Scale multi-agent campaigns, autonomous publishing, and human-in-the-loop approvals with the Fastest Autonomous Growth Platform.
                 </p>
               </div>
@@ -359,7 +359,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/25">
                     S
                   </div>
-                  <span className="font-extrabold text-neutral-900 tracking-tight text-sm uppercase">
+                  <span className="font-extrabold text-[#0f172a] tracking-tight text-sm uppercase">
                     SINCLY <span className="text-[10px] text-emerald-600 font-mono font-bold">OS</span>
                   </span>
                 </div>
@@ -367,11 +367,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
               {/* Headings */}
               <div className="space-y-1.5 pt-2">
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-neutral-900 tracking-tight flex items-baseline">
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0f172a] tracking-tight flex items-baseline">
                   <span>{isSignUp ? 'Sign up Now' : 'Sign in Now'}</span>
                   <span className="text-emerald-500 text-4xl">.</span>
                 </h2>
-                <p className="text-xs sm:text-sm text-neutral-400 font-medium">
+                <p className="text-xs sm:text-sm text-[#64748b] font-medium">
                   {isSignUp
                     ? 'Create your Sincly workspace account below'
                     : 'Enter your detail below'}
@@ -400,11 +400,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 {/* 1. Full Name Field (Sign Up Mode Only) */}
                 {isSignUp && (
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-neutral-700">
+                    <label className="block text-xs font-bold text-[#1e293b]">
                       Full Name
                     </label>
-                    <div className="relative flex items-center rounded-2xl bg-white border border-neutral-200/90 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                      <div className="pl-4 pr-2 text-neutral-400">
+                    <div className="relative flex items-center rounded-2xl bg-white border border-[#e2e8f0] shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+                      <div className="pl-4 pr-2 text-[#64748b]">
                         <User className="h-4 w-4 text-emerald-600" />
                       </div>
                       <input
@@ -413,7 +413,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         value={name}
                         onChange={e => setName(e.target.value)}
                         placeholder="e.g. Belal Hossain"
-                        className="w-full py-3.5 pr-4 text-xs font-sans text-neutral-900 placeholder:text-neutral-300 bg-transparent focus:outline-none"
+                        className="w-full py-3.5 pr-4 text-xs font-sans text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
                       />
                     </div>
                   </div>
@@ -421,11 +421,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                 {/* 2. Username or Email Input Field matching reference image card */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-neutral-700">
+                  <label className="block text-xs font-bold text-[#1e293b]">
                     Username or Email
                   </label>
-                  <div className="relative flex items-center rounded-2xl bg-white border border-neutral-200/90 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                    <div className="pl-4 pr-2 text-neutral-400">
+                  <div className="relative flex items-center rounded-2xl bg-white border border-[#e2e8f0] shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+                    <div className="pl-4 pr-2 text-[#64748b]">
                       <Mail className="h-4 w-4 text-emerald-600" />
                     </div>
                     <input
@@ -434,18 +434,18 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       placeholder="dash@ui8.net"
-                      className="w-full py-3.5 pr-4 text-xs font-mono text-neutral-900 placeholder:text-neutral-300 bg-transparent focus:outline-none"
+                      className="w-full py-3.5 pr-4 text-xs font-mono text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
                     />
                   </div>
                 </div>
 
                 {/* 3. Password Input Field matching reference image card */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-neutral-700">
+                  <label className="block text-xs font-bold text-[#1e293b]">
                     Password
                   </label>
-                  <div className="relative flex items-center rounded-2xl bg-white border border-neutral-200/90 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                    <div className="pl-4 pr-2 text-neutral-400">
+                  <div className="relative flex items-center rounded-2xl bg-white border border-[#e2e8f0] shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+                    <div className="pl-4 pr-2 text-[#64748b]">
                       <Lock className="h-4 w-4 text-emerald-600" />
                     </div>
                     <input
@@ -454,12 +454,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       placeholder="Password"
-                      className="w-full py-3.5 pr-10 text-xs font-mono text-neutral-900 placeholder:text-neutral-300 bg-transparent focus:outline-none"
+                      className="w-full py-3.5 pr-10 text-xs font-mono text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 text-neutral-400 hover:text-neutral-700 transition-colors p-1"
+                      className="absolute right-3.5 text-[#64748b] hover:text-[#0f172a] transition-colors p-1"
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" />
@@ -473,11 +473,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 {/* 4. Confirm Password (Sign Up Mode Only) */}
                 {isSignUp && (
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-neutral-700">
+                    <label className="block text-xs font-bold text-[#1e293b]">
                       Confirm Password
                     </label>
-                    <div className="relative flex items-center rounded-2xl bg-white border border-neutral-200/90 shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                      <div className="pl-4 pr-2 text-neutral-400">
+                    <div className="relative flex items-center rounded-2xl bg-white border border-[#e2e8f0] shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+                      <div className="pl-4 pr-2 text-[#64748b]">
                         <Lock className="h-4 w-4 text-emerald-600" />
                       </div>
                       <input
@@ -486,7 +486,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         value={confirmPassword}
                         onChange={e => setConfirmPassword(e.target.value)}
                         placeholder="Re-enter password"
-                        className="w-full py-3.5 pr-4 text-xs font-mono text-neutral-900 placeholder:text-neutral-300 bg-transparent focus:outline-none"
+                        className="w-full py-3.5 pr-4 text-xs font-mono text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
                       />
                     </div>
                   </div>
@@ -501,7 +501,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     onChange={e => setRememberMe(e.target.checked)}
                     className="h-4 w-4 rounded-md border-neutral-300 text-emerald-600 focus:ring-emerald-500/30 cursor-pointer"
                   />
-                  <label htmlFor="rememberSession" className="text-xs text-neutral-500 font-medium cursor-pointer select-none">
+                  <label htmlFor="rememberSession" className="text-xs text-[#475569] hover:text-[#0f172a] font-medium cursor-pointer select-none transition-colors">
                     Remember me
                   </label>
                 </div>
@@ -525,26 +525,29 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     )}
                   </button>
 
-                  {/* Highlighted Account Switch Callout */}
-                  <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50/60 to-emerald-50 border border-emerald-200/90 text-center shadow-xs">
+                  {/* Highlighted Account Switch Callout with crystal-clear contrast and crisp hover */}
+                  <div
+                    onClick={toggleAuthMode}
+                    className="group p-3.5 rounded-2xl bg-[#ecfdf5] hover:bg-[#d1fae5] border border-[#a7f3d0] hover:border-[#6ee7b7] text-center shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
+                  >
                     <button
                       type="button"
-                      onClick={toggleAuthMode}
-                      className="text-xs text-neutral-700 hover:text-emerald-950 font-medium transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer pointer-events-none"
+                      tabIndex={-1}
                     >
                       {isSignUp ? (
-                        <span>
+                        <span className="text-[#334155] group-hover:text-[#0f172a] transition-colors">
                           Already have an account?{' '}
-                          <strong className="text-emerald-600 underline font-extrabold hover:text-emerald-700">
+                          <span className="text-[#047857] group-hover:text-[#064e3b] underline underline-offset-2 font-extrabold transition-colors">
                             Sign in now
-                          </strong>
+                          </span>
                         </span>
                       ) : (
-                        <span>
+                        <span className="text-[#334155] group-hover:text-[#0f172a] transition-colors">
                           Don't have an account?{' '}
-                          <strong className="text-emerald-600 underline font-extrabold hover:text-emerald-700">
+                          <span className="text-[#047857] group-hover:text-[#064e3b] underline underline-offset-2 font-extrabold transition-colors">
                             Sign up now
-                          </strong>
+                          </span>
                         </span>
                       )}
                     </button>
@@ -558,7 +561,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       </div>
 
       {/* Clean Minimalist Bottom Footer */}
-      <footer className="relative z-10 w-full py-4 text-center text-xs text-neutral-400 font-medium">
+      <footer className="relative z-10 w-full py-4 text-center text-xs text-[#64748b] font-medium">
         Sincly AI Marketing OS · Autonomous Multi-Agent Governance
       </footer>
     </div>
