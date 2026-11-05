@@ -120,7 +120,12 @@ export const PATH_TO_VIEW: Record<string, ViewId> = {
 
 export const getViewFromPathname = (pathname: string): { view: ViewId; isLogin: boolean } => {
   const norm = (pathname || '').replace(/\/+$/, '') || '/';
-  if (norm.toLowerCase() === '/login') {
+  if (
+    norm.toLowerCase() === '/login' ||
+    norm.toLowerCase() === '/signup' ||
+    norm === '/' ||
+    norm === ''
+  ) {
     return { view: 'dashboard', isLogin: true };
   }
   const found = PATH_TO_VIEW[norm.toLowerCase()];
@@ -235,7 +240,8 @@ export const AppShell: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     if (window.location.pathname === '' || window.location.pathname === '/') {
-      window.history.replaceState({ view: 'dashboard' }, '', '/dashboard');
+      window.history.replaceState({ isLogin: true }, '', '/login');
+      setIsAuthScreenOpen(true);
     }
 
     const handlePopState = () => {

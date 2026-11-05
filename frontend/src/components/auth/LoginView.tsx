@@ -352,8 +352,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
             {/* Main Form Box Container */}
             <div className="relative z-10 w-full max-w-md mx-auto space-y-6">
               
-              {/* Top Row: Brand Monogram on left + "Not a member? Sign up now" on right matching reference image */}
-              <div className="flex items-center justify-between">
+              {/* Top Row: Brand Monogram */}
+              <div className="flex items-center">
                 {/* Sincly Brand Monogram Pill matching reference UI */}
                 <div className="flex items-center gap-2.5">
                   <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/25">
@@ -362,20 +362,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   <span className="font-extrabold text-neutral-900 tracking-tight text-sm uppercase">
                     SINCLY <span className="text-[10px] text-emerald-600 font-mono font-bold">OS</span>
                   </span>
-                </div>
-
-                {/* Sign up / Sign in toggle pill button in top right matching reference image */}
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-neutral-500 font-medium hidden sm:inline">
-                    {isSignUp ? 'Already a member?' : 'Not a member?'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={toggleAuthMode}
-                    className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
-                  >
-                    {isSignUp ? 'Sign in' : 'Sign up now'}
-                  </button>
                 </div>
               </div>
 
@@ -520,12 +506,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </label>
                 </div>
 
-                {/* CTA Submit Button (Styled matching the reference image's pill button) */}
-                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                {/* CTA Submit Button & Highlighted Sign Up Callout */}
+                <div className="pt-2 space-y-3">
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full sm:w-44 py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     {isSubmitting ? (
                       <>
@@ -539,13 +525,30 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     )}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={toggleAuthMode}
-                    className="text-xs text-neutral-500 hover:text-emerald-700 font-medium transition-colors text-center sm:text-right"
-                  >
-                    {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up now"}
-                  </button>
+                  {/* Highlighted Account Switch Callout */}
+                  <div className="p-3 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50/60 to-emerald-50 border border-emerald-200/90 text-center shadow-xs">
+                    <button
+                      type="button"
+                      onClick={toggleAuthMode}
+                      className="text-xs text-neutral-700 hover:text-emerald-950 font-medium transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {isSignUp ? (
+                        <span>
+                          Already have an account?{' '}
+                          <strong className="text-emerald-600 underline font-extrabold hover:text-emerald-700">
+                            Sign in now
+                          </strong>
+                        </span>
+                      ) : (
+                        <span>
+                          Don't have an account?{' '}
+                          <strong className="text-emerald-600 underline font-extrabold hover:text-emerald-700">
+                            Sign up now
+                          </strong>
+                        </span>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>
