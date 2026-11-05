@@ -200,12 +200,32 @@ function createInitialDb() {
       description: 'Autonomous AI Growth & Marketing Workspace',
       voiceTone: 'Professional, Authoritative & Engaging',
       targetAudience: 'Global Audience',
+      tagline: 'Autonomous AI Growth & Marketing Engine',
+      mission: 'Scale revenue and brand authority through autonomous AI marketing orchestration.',
       keyThemes: [],
-      brandColors: ['#10b981', '#064e3b', '#0f172a']
+      brandColors: ['#10b981', '#064e3b', '#0f172a'],
+      coreUSPs: [],
+      competitors: [],
+      brandRules: [],
+      knowledgeDocs: []
     },
     agents: structuredClone(mockAgents),
     approvals: [] as ApprovalItem[],
-    geoScore: { overallScore: 0, breakdowns: [] } as GeoScoreData,
+    geoScore: {
+      overallScore: 0,
+      change30Days: 0,
+      lastAuditedUrl: '',
+      lastAuditedAt: 'Not audited yet',
+      aiEngineBreakdown: [
+        { engine: 'ChatGPT / SearchGPT', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+        { engine: 'Google Gemini', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+        { engine: 'Perplexity AI', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+        { engine: 'Claude', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' }
+      ],
+      hallucinationAlerts: [],
+      topRankedEntities: [],
+      technicalFixes: []
+    } as GeoScoreData,
     campaigns: [] as CampaignItem[],
     contentList: [] as ContentItem[],
     socialPosts: [] as SocialPost[],
@@ -565,18 +585,37 @@ async function startServer() {
     (db as any).messagingConfig = structuredClone(mockMessagingConfig);
   }
 
-  // Ensure connectedPages exists as clean array without mock accounts
-  if (!Array.isArray(db.connectedPages)) {
-    db.connectedPages = [];
+  // Ensure brandProfile has all expected fields and arrays
+  if (!db.brandProfile || typeof db.brandProfile !== 'object') {
+    db.brandProfile = createInitialDb().brandProfile;
   } else {
-    // Purge any legacy mock/demo pages
-    db.connectedPages = db.connectedPages.filter(
-      p => !p.id?.startsWith('page-threads-') &&
-           !p.id?.startsWith('page-bluesky-') &&
-           !p.id?.startsWith('page-tiktok-') &&
-           !p.id?.startsWith('page-pinterest-') &&
-           !p.pageName?.includes('Tech Sheba')
-    );
+    if (!Array.isArray(db.brandProfile.coreUSPs)) db.brandProfile.coreUSPs = [];
+    if (!Array.isArray(db.brandProfile.competitors)) db.brandProfile.competitors = [];
+    if (!Array.isArray(db.brandProfile.brandRules)) db.brandProfile.brandRules = [];
+    if (!Array.isArray(db.brandProfile.knowledgeDocs)) db.brandProfile.knowledgeDocs = [];
+    if (!Array.isArray(db.brandProfile.keyThemes)) db.brandProfile.keyThemes = [];
+    if (!Array.isArray(db.brandProfile.brandColors)) db.brandProfile.brandColors = ['#10b981', '#064e3b', '#0f172a'];
+    if (typeof db.brandProfile.tagline !== 'string') db.brandProfile.tagline = 'Autonomous AI Growth & Marketing Engine';
+    if (typeof db.brandProfile.mission !== 'string') db.brandProfile.mission = 'Scale revenue and brand authority through autonomous AI marketing orchestration.';
+  }
+
+  // Ensure geoScore has all expected fields and arrays
+  if (!db.geoScore || typeof db.geoScore !== 'object') {
+    db.geoScore = createInitialDb().geoScore;
+  } else {
+    if (!Array.isArray(db.geoScore.aiEngineBreakdown) || db.geoScore.aiEngineBreakdown.length === 0) {
+      db.geoScore.aiEngineBreakdown = [
+        { engine: 'ChatGPT / SearchGPT', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+        { engine: 'Google Gemini', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+        { engine: 'Perplexity AI', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+        { engine: 'Claude', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' }
+      ];
+    }
+    if (!Array.isArray(db.geoScore.hallucinationAlerts)) db.geoScore.hallucinationAlerts = [];
+    if (!Array.isArray(db.geoScore.topRankedEntities)) db.geoScore.topRankedEntities = [];
+    if (!Array.isArray(db.geoScore.technicalFixes)) db.geoScore.technicalFixes = [];
+    if (typeof db.geoScore.overallScore !== 'number') db.geoScore.overallScore = 0;
+    if (typeof db.geoScore.change30Days !== 'number') db.geoScore.change30Days = 0;
   }
 
   // Initialize and start Central Scheduling Connector Engine
@@ -1566,7 +1605,7 @@ async function startServer() {
         configured: smtpConfigured,
         mode: smtpConfigured ? 'live' : 'sandbox',
         verified: Boolean(smtpSession?.verified),
-        host: smtpSession?.host || 'smtp.yourdomain.com',
+        host: smtpSession?.host || '',
         port: smtpSession?.port || 587,
         secure: Boolean(smtpSession?.secure),
         user: smtpSession?.user || '',

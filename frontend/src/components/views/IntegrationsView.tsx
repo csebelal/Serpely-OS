@@ -840,26 +840,24 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                   className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
                     liveStatus?.facebook?.mode === 'live'
                       ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-neutral-800 text-neutral-400 border-neutral-700'
                   }`}
                 >
-                  {liveStatus?.facebook?.mode === 'live' ? 'LIVE CONNECTED' : 'DEV / SANDBOX'}
+                  {liveStatus?.facebook?.mode === 'live' ? 'CONNECTED' : 'NOT CONNECTED'}
                 </span>
               </div>
 
               <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800/80 text-xs space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Target Page:</span>
-                  <span className="font-semibold text-white truncate max-w-[170px]">
-                    {liveStatus?.facebook?.pageName || 'Awaiting OAuth Login'}
+                  <span className="text-neutral-400">Connection Status:</span>
+                  <span className={`font-semibold ${liveStatus?.facebook?.mode === 'live' ? 'text-emerald-400' : 'text-neutral-400'}`}>
+                    {liveStatus?.facebook?.mode === 'live' ? 'Active & Ready' : 'Disconnected'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Meta App:</span>
-                  <span className="font-mono text-[11px] text-blue-300">
-                    {liveStatus?.facebook?.appIdMasked
-                      ? `App ID: ${liveStatus.facebook.appIdMasked}`
-                      : 'Not Configured'}
+                  <span className="text-neutral-400">Connected Page:</span>
+                  <span className="font-medium text-white truncate max-w-[190px]">
+                    {liveStatus?.facebook?.pageName || 'None (Click Login with Facebook)'}
                   </span>
                 </div>
 
@@ -966,26 +964,24 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                   className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
                     liveStatus?.linkedin?.mode === 'live'
                       ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-neutral-800 text-neutral-400 border-neutral-700'
                   }`}
                 >
-                  {liveStatus?.linkedin?.mode === 'live' ? 'LIVE CONNECTED' : 'DEV / SANDBOX'}
+                  {liveStatus?.linkedin?.mode === 'live' ? 'CONNECTED' : 'NOT CONNECTED'}
                 </span>
               </div>
 
               <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800/80 text-xs space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Target Account:</span>
-                  <span className="font-semibold text-white truncate max-w-[170px]">
-                    {liveStatus?.linkedin?.pageName || 'Awaiting OAuth Login'}
+                  <span className="text-neutral-400">Connection Status:</span>
+                  <span className={`font-semibold ${liveStatus?.linkedin?.mode === 'live' ? 'text-emerald-400' : 'text-neutral-400'}`}>
+                    {liveStatus?.linkedin?.mode === 'live' ? 'Active & Ready' : 'Disconnected'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Client ID:</span>
-                  <span className="font-mono text-[11px] text-sky-300">
-                    {liveStatus?.linkedin?.clientIdMasked
-                      ? `Client: ${liveStatus.linkedin.clientIdMasked}`
-                      : 'Not Configured'}
+                  <span className="text-neutral-400">Connected Account:</span>
+                  <span className="font-medium text-white truncate max-w-[190px]">
+                    {liveStatus?.linkedin?.pageName || 'None (Choose Profile or Page)'}
                   </span>
                 </div>
 
@@ -1099,28 +1095,24 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                   className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
                     liveStatus?.google?.mode === 'live'
                       ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-neutral-800 text-neutral-400 border-neutral-700'
                   }`}
                 >
-                  {liveStatus?.google?.mode === 'live' ? 'LIVE CONNECTED' : 'DEV / SANDBOX'}
+                  {liveStatus?.google?.mode === 'live' ? 'CONNECTED' : 'NOT CONNECTED'}
                 </span>
               </div>
 
               <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800/80 text-xs space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Channel / Ads:</span>
-                  <span className="font-semibold text-white truncate max-w-[160px]">
-                    {liveStatus?.google?.channelName || 'Awaiting API Key / OAuth'}
+                  <span className="text-neutral-400">Connection Status:</span>
+                  <span className={`font-semibold ${liveStatus?.google?.mode === 'live' ? 'text-emerald-400' : 'text-neutral-400'}`}>
+                    {liveStatus?.google?.mode === 'live' ? 'Active & Ready' : 'Disconnected'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Credentials:</span>
-                  <span className="font-mono text-[11px] text-rose-300">
-                    {liveStatus?.google?.apiKeyMasked
-                      ? `API Key: ${liveStatus.google.apiKeyMasked}`
-                      : liveStatus?.google?.clientIdMasked
-                      ? `OAuth: ${liveStatus.google.clientIdMasked}`
-                      : 'Not Configured'}
+                  <span className="text-neutral-400">Connected Channel:</span>
+                  <span className="font-medium text-white truncate max-w-[170px]">
+                    {liveStatus?.google?.channelName || 'None (Click Google OAuth)'}
                   </span>
                 </div>
               </div>
@@ -1177,28 +1169,24 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                   className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${
                     liveStatus?.hubspot?.mode === 'live'
                       ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-neutral-800 text-neutral-400 border-neutral-700'
                   }`}
                 >
-                  {liveStatus?.hubspot?.mode === 'live' ? 'LIVE CONNECTED' : 'DEV / SANDBOX'}
+                  {liveStatus?.hubspot?.mode === 'live' ? 'CONNECTED' : 'NOT CONNECTED'}
                 </span>
               </div>
 
               <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800/80 text-xs space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">CRM Portal:</span>
-                  <span className="font-semibold text-white">
-                    {liveStatus?.hubspot?.accountName || 'Awaiting Token / OAuth'}
+                  <span className="text-neutral-400">Connection Status:</span>
+                  <span className={`font-semibold ${liveStatus?.hubspot?.mode === 'live' ? 'text-emerald-400' : 'text-neutral-400'}`}>
+                    {liveStatus?.hubspot?.mode === 'live' ? 'Active & Synced' : 'Disconnected'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-400">Token / Contacts:</span>
-                  <span className="font-mono text-[11px] text-amber-300">
-                    {liveStatus?.hubspot?.tokenMasked
-                      ? `Token: ${liveStatus.hubspot.tokenMasked}`
-                      : liveStatus?.hubspot?.clientIdMasked
-                      ? `OAuth: ${liveStatus.hubspot.clientIdMasked}`
-                      : 'Not Configured'}
+                  <span className="text-neutral-400">Connected Portal:</span>
+                  <span className="font-medium text-white truncate max-w-[170px]">
+                    {liveStatus?.hubspot?.accountName || 'None (Click HubSpot OAuth)'}
                   </span>
                 </div>
               </div>
@@ -1257,34 +1245,34 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                   className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border self-start sm:self-auto ${
                     liveStatus?.smtp?.mode === 'live'
                       ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                      : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                      : 'bg-neutral-800 text-neutral-400 border-neutral-700'
                   }`}
                 >
-                  {liveStatus?.smtp?.mode === 'live' ? 'LIVE SMTP READY' : 'SANDBOX SMTP'}
+                  {liveStatus?.smtp?.mode === 'live' ? 'CONFIGURED' : 'NOT CONFIGURED'}
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-neutral-950 border border-neutral-800/80 text-xs">
                 <div>
-                  <div className="text-neutral-400 text-[10px] uppercase">SMTP Host & Port</div>
-                  <div className="font-mono text-white font-semibold mt-0.5">
-                    {liveStatus?.smtp?.host || 'smtp.gmail.com'}:{liveStatus?.smtp?.port || 587}
+                  <div className="text-neutral-400 text-[10px] uppercase">Service Status</div>
+                  <div className={`font-semibold mt-0.5 ${liveStatus?.smtp?.mode === 'live' ? 'text-emerald-400' : 'text-neutral-400'}`}>
+                    {liveStatus?.smtp?.mode === 'live' ? 'Active & Ready' : 'Disconnected'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-neutral-400 text-[10px] uppercase">Authenticated User</div>
-                  <div className="font-mono text-emerald-300 truncate mt-0.5">
-                    {liveStatus?.smtp?.user || 'Not configured'}
+                  <div className="text-neutral-400 text-[10px] uppercase">Sender Account</div>
+                  <div className="text-white truncate font-medium mt-0.5">
+                    {liveStatus?.smtp?.user || 'None configured'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-neutral-400 text-[10px] uppercase">TLS Verification</div>
-                  <div className="text-neutral-200 font-semibold mt-0.5">
+                  <div className="text-neutral-400 text-[10px] uppercase">Email Delivery</div>
+                  <div className="text-neutral-300 font-medium mt-0.5">
                     {liveStatus?.smtp?.verified
-                      ? 'Verified Live TLS'
-                      : liveStatus?.smtp?.passMasked
-                      ? `Password Set (${liveStatus.smtp.passMasked})`
-                      : 'Enter App Password'}
+                      ? 'TLS Handshake Verified'
+                      : liveStatus?.smtp?.user
+                      ? 'Credentials Saved'
+                      : 'Setup Required'}
                   </div>
                 </div>
               </div>

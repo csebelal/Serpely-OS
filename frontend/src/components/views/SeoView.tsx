@@ -17,14 +17,34 @@ interface SeoViewProps {
   brandWebsite?: string;
 }
 
+const normalizeGeoScore = (raw?: GeoScoreData): GeoScoreData => {
+  return {
+    overallScore: raw?.overallScore ?? 0,
+    change30Days: raw?.change30Days ?? 0,
+    lastAuditedUrl: raw?.lastAuditedUrl || '',
+    lastAuditedAt: raw?.lastAuditedAt || 'Not audited yet',
+    aiEngineBreakdown: Array.isArray(raw?.aiEngineBreakdown) && raw!.aiEngineBreakdown.length > 0
+      ? raw!.aiEngineBreakdown
+      : [
+          { engine: 'ChatGPT / SearchGPT', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+          { engine: 'Google Gemini', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+          { engine: 'Perplexity AI', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
+          { engine: 'Claude', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' }
+        ],
+    hallucinationAlerts: Array.isArray(raw?.hallucinationAlerts) ? raw!.hallucinationAlerts : [],
+    topRankedEntities: Array.isArray(raw?.topRankedEntities) ? raw!.topRankedEntities : [],
+    technicalFixes: Array.isArray(raw?.technicalFixes) ? raw!.technicalFixes : []
+  };
+};
+
 export const SeoView: React.FC<SeoViewProps> = ({
   geoScore = mockGeoScore,
   onUpdateGeoScore,
   brandName = 'Brand',
   brandWebsite = 'https://brand.com'
 }) => {
-  const [geoData, setGeoData] = useState<GeoScoreData>(geoScore);
-  const [targetUrl, setTargetUrl] = useState<string>(geoScore.lastAuditedUrl || brandWebsite);
+  const [geoData, setGeoData] = useState<GeoScoreData>(() => normalizeGeoScore(geoScore));
+  const [targetUrl, setTargetUrl] = useState<string>(geoScore?.lastAuditedUrl || brandWebsite);
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
   const [crawledMeta, setCrawledMeta] = useState<{
@@ -36,8 +56,8 @@ export const SeoView: React.FC<SeoViewProps> = ({
   } | null>(null);
 
   useEffect(() => {
-    setGeoData(geoScore);
-    if (geoScore.lastAuditedUrl) {
+    setGeoData(normalizeGeoScore(geoScore));
+    if (geoScore?.lastAuditedUrl) {
       setTargetUrl(geoScore.lastAuditedUrl);
     }
   }, [geoScore]);
@@ -83,7 +103,7 @@ export const SeoView: React.FC<SeoViewProps> = ({
     const next: GeoScoreData = {
       ...geoData,
       overallScore: Math.min(100, geoData.overallScore + 1),
-      hallucinationAlerts: geoData.hallucinationAlerts.map(h =>
+      hallucinationAlerts: (geoData.hallucinationAlerts || []).map(h =>
         h.id === id ? { ...h, status: 'addressed' as const } : h
       )
     };
@@ -203,7 +223,7 @@ export const SeoView: React.FC<SeoViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {geoData.aiEngineBreakdown.map((engine, idx) => (
+            {(geoData.aiEngineBreakdown || []).map((engine, idx) => (
               <div
                 key={idx}
                 className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2"
@@ -295,12 +315,12 @@ export const SeoView: React.FC<SeoViewProps> = ({
             <h3 className="text-sm font-bold text-white">AI Hallucination Alerts</h3>
           </div>
           <span className="text-xs text-amber-400 font-bold tabular-nums">
-            {geoData.hallucinationAlerts.filter(h => h.status === 'open').length} Open
+            {(geoData.hallucinationAlerts || []).filter(h => h.status === 'open').length} Open
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {geoData.hallucinationAlerts.map(alert => (
+          {(geoData.hallucinationAlerts || []).map(alert => (
             <div
               key={alert.id}
               className={`p-4 rounded-xl border text-xs space-y-2.5 flex flex-col justify-between ${
@@ -358,7 +378,7 @@ export const SeoView: React.FC<SeoViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/80 tabular-nums">
-              {geoData.topRankedEntities.map((ent, idx) => (
+              {(geoData.topRankedEntities || []).map((ent, idx) => (
                 <tr key={idx} className="hover:bg-neutral-900/50">
                   <td className="py-2.5 font-semibold text-white">{ent.entity}</td>
                   <td className="py-2.5 text-emerald-400 font-bold">{ent.visibility}%</td>

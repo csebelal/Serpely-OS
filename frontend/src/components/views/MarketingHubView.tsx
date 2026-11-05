@@ -183,7 +183,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
     if (!newUsp.trim()) return;
     syncProfileUpdate({
       ...profile,
-      coreUSPs: [...profile.coreUSPs, newUsp.trim()]
+      coreUSPs: [...(profile.coreUSPs || []), newUsp.trim()]
     });
     setNewUsp('');
   };
@@ -191,7 +191,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
   const handleRemoveUsp = (index: number) => {
     syncProfileUpdate({
       ...profile,
-      coreUSPs: profile.coreUSPs.filter((_, idx) => idx !== index)
+      coreUSPs: (profile.coreUSPs || []).filter((_, idx) => idx !== index)
     });
   };
 
@@ -200,7 +200,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
     syncProfileUpdate({
       ...profile,
       competitors: [
-        ...profile.competitors,
+        ...(profile.competitors || []),
         {
           name: newCompName.trim(),
           focus: newCompFocus.trim() || 'Enterprise Marketing Automation',
@@ -215,7 +215,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
   const handleRemoveCompetitor = (index: number) => {
     syncProfileUpdate({
       ...profile,
-      competitors: profile.competitors.filter((_, idx) => idx !== index)
+      competitors: (profile.competitors || []).filter((_, idx) => idx !== index)
     });
   };
 
@@ -223,7 +223,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
     if (!newRule.trim()) return;
     syncProfileUpdate({
       ...profile,
-      brandRules: [...profile.brandRules, newRule.trim()]
+      brandRules: [...(profile.brandRules || []), newRule.trim()]
     });
     setNewRule('');
   };
@@ -231,7 +231,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
   const handleRemoveRule = (index: number) => {
     syncProfileUpdate({
       ...profile,
-      brandRules: profile.brandRules.filter((_, idx) => idx !== index)
+      brandRules: (profile.brandRules || []).filter((_, idx) => idx !== index)
     });
   };
 
@@ -632,7 +632,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
               <div className="space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                    Core USPs ({profile.coreUSPs.length})
+                    Core USPs ({(profile.coreUSPs || []).length})
                   </h3>
                   <div className="flex items-center gap-2">
                     <input
@@ -654,7 +654,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {profile.coreUSPs.map((usp, i) => (
+                  {(profile.coreUSPs || []).map((usp, i) => (
                     <div
                       key={i}
                       className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-200 flex items-start justify-between gap-2 group hover:border-neutral-700 transition-colors"
@@ -679,7 +679,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
               <div className="space-y-3 pt-4 border-t border-neutral-800">
                 <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-2">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                    Competitors ({profile.competitors.length})
+                    Competitors ({(profile.competitors || []).length})
                   </h3>
                   <div className="flex flex-wrap items-center gap-2">
                     <input
@@ -718,7 +718,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {profile.competitors.map((comp, i) => (
+                  {(profile.competitors || []).map((comp, i) => (
                     <div
                       key={i}
                       className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between text-xs gap-2 group hover:border-neutral-700 transition-colors"
@@ -757,7 +757,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Brand Guardrail Rules ({profile.brandRules.length})</span>
+                <span>Brand Guardrail Rules ({(profile.brandRules || []).length})</span>
               </h3>
               <div className="flex items-center gap-2">
                 <input
@@ -779,7 +779,7 @@ export const MarketingHubView: React.FC<MarketingHubViewProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {profile.brandRules.map((rule, i) => (
+              {(profile.brandRules || []).map((rule, i) => (
                 <div
                   key={i}
                   className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-neutral-200 flex items-center justify-between gap-3 group hover:border-neutral-700 transition-colors"
