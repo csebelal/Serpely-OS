@@ -1,0 +1,8 @@
+{
+  "name": "Serpely AI Marketing OS",
+  "description": "Autonomous multi-agent marketing operating system for Serpely. Controls 12 specialized AI agents across research, strategy, content, SEO, ads, and social media with human approval gates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,536 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  html,
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #070a09;
+    color: #f1f5f9;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  html.light body {
+    background-color: #eef3f0;
+    color: #09110d;
+  }
+}
+
+/* Force pure Inter font across all font-mono utilities while keeping tabular numeral alignment */
+.font-mono,
+code,
+kbd,
+pre {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================================
+   SERPELY BENTO LIGHT & DARK THEME SYSTEM
+   ============================================================================ */
+
+html.light {
+  color-scheme: light;
+
+  --color-neutral-950: #f4f7f5;
+  --color-neutral-900: #ffffff;
+  --color-neutral-800: #e3ece6;
+  --color-neutral-700: #cdd9d1;
+  --color-neutral-600: #8fa397;
+  --color-neutral-500: #52635a;
+  --color-neutral-400: #3b4c43;
+  --color-neutral-300: #1f2e26;
+  --color-neutral-200: #111b16;
+  --color-neutral-100: #09110d;
+  --color-neutral-50: #050a07;
+
+  --color-slate-950: #f4f7f5;
+  --color-slate-900: #ffffff;
+  --color-slate-800: #e2e8f0;
+  --color-slate-700: #cbd5e1;
+  --color-slate-500: #475569;
+  --color-slate-400: #334155;
+  --color-slate-300: #1e293b;
+  --color-slate-200: #0f172a;
+  --color-slate-100: #09110d;
+
+  --color-emerald-950: #e8f8ef;
+  --color-emerald-900: #d1f0df;
+  --color-emerald-400: #059669;
+  --color-emerald-300: #047857;
+  --color-emerald-200: #065f46;
+  --color-emerald-100: #064e3b;
+
+  --color-green-400: #16a34a;
+  --color-green-300: #15803d;
+  --color-green-200: #166534;
+
+  --color-teal-400: #0d9488;
+  --color-teal-300: #0f766e;
+  --color-teal-200: #115e59;
+
+  --color-amber-950: #fffbeb;
+  --color-amber-900: #fef3c7;
+  --color-amber-400: #b45309;
+  --color-amber-300: #92400e;
+  --color-amber-200: #92400e;
+  --color-amber-100: #78350f;
+
+  --color-yellow-400: #a16207;
+  --color-yellow-300: #854d0e;
+  --color-yellow-200: #713f12;
+
+  --color-orange-400: #c2410c;
+  --color-orange-300: #9a3412;
+  --color-orange-200: #7c2d12;
+
+  --color-blue-950: #eff6ff;
+  --color-blue-900: #dbeafe;
+  --color-blue-400: #1d4ed8;
+  --color-blue-300: #1e40af;
+  --color-blue-200: #1e3a8a;
+  --color-blue-100: #172554;
+
+  --color-sky-950: #f0f9ff;
+  --color-sky-900: #e0f2fe;
+  --color-sky-400: #0284c7;
+  --color-sky-300: #0369a1;
+  --color-sky-200: #075985;
+  --color-sky-100: #0c4a6e;
+
+  --color-indigo-950: #eef2ff;
+  --color-indigo-900: #e0e7ff;
+  --color-indigo-400: #4338ca;
+  --color-indigo-300: #3730a3;
+  --color-indigo-200: #312e81;
+  --color-indigo-100: #1e1b4b;
+
+  --color-purple-950: #faf5ff;
+  --color-purple-900: #f3e8ff;
+  --color-purple-400: #6d28d9;
+  --color-purple-300: #5b21b6;
+  --color-purple-200: #4c1d95;
+  --color-purple-100: #2e1065;
+
+  --color-violet-950: #f5f3ff;
+  --color-violet-900: #ede9fe;
+  --color-violet-400: #6d28d9;
+  --color-violet-300: #5b21b6;
+  --color-violet-200: #4c1d95;
+
+  --color-rose-950: #fff1f2;
+  --color-rose-900: #ffe4e6;
+  --color-rose-400: #be123c;
+  --color-rose-300: #9f1239;
+  --color-rose-200: #881337;
+  --color-rose-100: #4c0519;
+
+  --color-red-950: #fef2f2;
+  --color-red-900: #fee2e2;
+  --color-red-400: #b91c1c;
+  --color-red-300: #991b1b;
+  --color-red-200: #7f1d1d;
+  --color-red-100: #450a0a;
+
+  --color-cyan-950: #ecfeff;
+  --color-cyan-900: #cffafe;
+  --color-cyan-400: #0e7490;
+  --color-cyan-300: #155e75;
+  --color-cyan-200: #164e63;
+}
+
+/* Preserve dark tokens on brand banners & email preview containers */
+html.light .preserve-theme {
+  --color-neutral-950: #0a0a0a;
+  --color-neutral-900: #171717;
+  --color-neutral-800: #262626;
+  --color-neutral-700: #404040;
+  --color-neutral-600: #525252;
+  --color-neutral-500: #737373;
+  --color-neutral-400: #a3a3a3;
+  --color-neutral-300: #d4d4d4;
+  --color-neutral-200: #e5e5e5;
+  --color-neutral-100: #f5f5f5;
+  --color-neutral-50: #fafafa;
+
+  --color-emerald-950: #022c22;
+  --color-emerald-900: #064e3b;
+  --color-emerald-400: #34d399;
+  --color-emerald-300: #6ee7b7;
+}
+
+/* Main Workspace Canvas */
+html.light main {
+  background-color: #f4f7f5;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.045) 0px, transparent 52%),
+    radial-gradient(at 100% 0%, rgba(15, 118, 110, 0.035) 0px, transparent 52%);
+}
+
+html.dark main {
+  background-color: #080c0a;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.065) 0px, transparent 55%),
+    radial-gradient(at 100% 100%, rgba(13, 148, 136, 0.04) 0px, transparent 50%);
+}
+
+/* Full-width content layout & generous Bento whitespace across all 18 views */
+main > div,
+main .max-w-7xl,
+main .max-w-6xl,
+main .max-w-5xl {
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Keep popup modals properly sized */
+main .fixed .max-w-6xl {
+  max-width: 72rem !important;
+}
+main .fixed .max-w-5xl {
+  max-width: 64rem !important;
+}
+main .fixed .max-w-4xl {
+  max-width: 56rem !important;
+}
+main .fixed .max-w-3xl {
+  max-width: 48rem !important;
+}
+main .fixed .max-w-2xl {
+  max-width: 42rem !important;
+}
+main .fixed .max-w-xl {
+  max-width: 36rem !important;
+}
+main .fixed .max-w-lg {
+  max-width: 32rem !important;
+}
+main .fixed .max-w-md {
+  max-width: 28rem !important;
+}
+
+/* ============================================================================
+   CRISP BENTO CARD ARCHITECTURE & FUNCTIONAL CONTROLS (ALL 18 VIEWS)
+   ============================================================================ */
+
+/* Upgrade view cards to crisp Bento geometry with soft shadows */
+main .rounded-xl {
+  border-radius: 1rem;
+}
+
+main .rounded-2xl {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+html.light main .bg-neutral-900,
+html.light main .bg-neutral-900\/90,
+html.light main .bg-neutral-900\/80,
+html.light main .bg-neutral-900\/70,
+html.light main .bg-neutral-900\/60,
+html.light main .bg-neutral-900\/50,
+html.light main .bg-neutral-900\/40,
+html.light main .bg-neutral-900\/30 {
+  background-color: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(9, 17, 13, 0.03),
+    0 8px 24px -6px rgba(6, 78, 59, 0.05);
+}
+
+html.dark main .bg-neutral-900,
+html.dark main .bg-neutral-900\/90,
+html.dark main .bg-neutral-900\/80,
+html.dark main .bg-neutral-900\/70,
+html.dark main .bg-neutral-900\/60,
+html.dark main .bg-neutral-900\/50,
+html.dark main .bg-neutral-900\/40,
+html.dark main .bg-neutral-900\/30 {
+  background-color: #101613;
+  box-shadow: 0 10px 28px -8px rgba(0, 0, 0, 0.42);
+}
+
+/* Nested sub-cards inside Bento containers */
+html.light main .bg-neutral-950,
+html.light main .bg-neutral-950\/80,
+html.light main .bg-neutral-950\/60,
+html.light main .bg-neutral-950\/50 {
+  background-color: #f7faf8;
+}
+
+html.dark main .bg-neutral-950,
+html.dark main .bg-neutral-950\/80,
+html.dark main .bg-neutral-950\/60,
+html.dark main .bg-neutral-950\/50 {
+  background-color: #0b0e0c;
+}
+
+/* Clean rounded buttons & interactive controls */
+main button.rounded-lg,
+main a.rounded-lg {
+  border-radius: 0.75rem;
+}
+
+/* Typography contrast rules in Light Mode */
+html.light .text-white {
+  color: #09110d !important;
+}
+
+/* Light mode hover state contrast rules: prevent white text on light backgrounds on hover */
+html.light .hover\:text-white:hover,
+html.light *:hover > .hover\:text-white,
+html.light button:hover.hover\:text-white,
+html.light button:hover .hover\:text-white,
+html.light button.hover\:text-white:hover > span:not([class*="bg-"]):not([class*="text-"]),
+html.light a:hover.hover\:text-white,
+html.light a:hover .hover\:text-white,
+html.light a.hover\:text-white:hover > span:not([class*="bg-"]):not([class*="text-"]),
+html.light [role="button"]:hover.hover\:text-white,
+html.light [role="button"]:hover .hover\:text-white,
+html.light [role="button"].hover\:text-white:hover > span:not([class*="bg-"]):not([class*="text-"]),
+html.light .group:hover .group-hover\:text-white,
+html.light div:hover.hover\:text-white,
+html.light span:hover.hover\:text-white {
+  color: #09110d !important;
+}
+
+/* Preserve crisp white text on colored/dark backgrounds & active controls in Light Mode */
+html.light .preserve-theme.text-white,
+html.light .preserve-theme .text-white,
+html.light .preserve-theme .hover\:text-white:hover,
+html.light .preserve-theme button:hover.hover\:text-white,
+html.light .preserve-theme button:hover .hover\:text-white,
+html.light .preserve-theme a:hover.hover\:text-white,
+html.light .preserve-theme a:hover .hover\:text-white,
+
+/* Solid colored buttons & badges */
+html.light .bg-emerald-600.text-white,
+html.light .bg-emerald-600 .text-white,
+html.light .bg-emerald-500.text-white,
+html.light .bg-emerald-500 .text-white,
+html.light .bg-emerald-700.text-white,
+html.light .bg-emerald-700 .text-white,
+html.light .bg-blue-600.text-white,
+html.light .bg-blue-600 .text-white,
+html.light .bg-blue-500.text-white,
+html.light .bg-blue-500 .text-white,
+html.light .bg-blue-700.text-white,
+html.light .bg-blue-700 .text-white,
+html.light .bg-sky-600.text-white,
+html.light .bg-sky-600 .text-white,
+html.light .bg-sky-500.text-white,
+html.light .bg-sky-500 .text-white,
+html.light .bg-cyan-600.text-white,
+html.light .bg-cyan-600 .text-white,
+html.light .bg-cyan-500.text-white,
+html.light .bg-cyan-500 .text-white,
+html.light .bg-indigo-600.text-white,
+html.light .bg-indigo-600 .text-white,
+html.light .bg-indigo-500.text-white,
+html.light .bg-indigo-500 .text-white,
+html.light .bg-purple-600.text-white,
+html.light .bg-purple-600 .text-white,
+html.light .bg-purple-500.text-white,
+html.light .bg-purple-500 .text-white,
+html.light .bg-rose-600.text-white,
+html.light .bg-rose-600 .text-white,
+html.light .bg-rose-700.text-white,
+html.light .bg-rose-700 .text-white,
+html.light .bg-rose-500.text-white,
+html.light .bg-rose-500 .text-white,
+html.light .bg-red-600.text-white,
+html.light .bg-red-600 .text-white,
+html.light .bg-red-700.text-white,
+html.light .bg-red-700 .text-white,
+html.light .bg-amber-600.text-white,
+html.light .bg-amber-600 .text-white,
+html.light .bg-amber-500.text-white,
+html.light .bg-amber-500 .text-white,
+html.light .bg-\[\#1877F2\].text-white,
+html.light .bg-\[\#1877F2\] .text-white,
+html.light .bg-\[\#0A66C2\].text-white,
+html.light .bg-\[\#0A66C2\] .text-white,
+html.light .bg-\[\#FF0000\].text-white,
+html.light .bg-\[\#FF0000\] .text-white,
+
+/* Gradient buttons */
+html.light [class*="bg-gradient-"].text-white,
+html.light [class*="bg-gradient-"] .text-white,
+html.light [class*="bg-gradient-"] > span,
+html.light [class*="bg-gradient-"]:hover.hover\:text-white,
+html.light [class*="bg-gradient-"]:hover .hover\:text-white,
+
+/* Dark/colored hover background buttons */
+html.light [class*="hover:bg-emerald-6"]:hover,
+html.light [class*="hover:bg-emerald-6"]:hover *,
+html.light [class*="hover:bg-emerald-7"]:hover,
+html.light [class*="hover:bg-emerald-7"]:hover *,
+html.light [class*="hover:bg-blue-6"]:hover,
+html.light [class*="hover:bg-blue-6"]:hover *,
+html.light [class*="hover:bg-blue-7"]:hover,
+html.light [class*="hover:bg-blue-7"]:hover *,
+html.light [class*="hover:bg-sky-6"]:hover,
+html.light [class*="hover:bg-sky-6"]:hover *,
+html.light [class*="hover:bg-indigo-6"]:hover,
+html.light [class*="hover:bg-indigo-6"]:hover *,
+html.light [class*="hover:bg-purple-6"]:hover,
+html.light [class*="hover:bg-purple-6"]:hover *,
+html.light [class*="hover:bg-rose-6"]:hover,
+html.light [class*="hover:bg-rose-6"]:hover *,
+html.light [class*="hover:bg-rose-7"]:hover,
+html.light [class*="hover:bg-rose-7"]:hover *,
+html.light [class*="hover:bg-red-6"]:hover,
+html.light [class*="hover:bg-red-6"]:hover * {
+  color: #ffffff !important;
+}
+
+html.light .text-neutral-950,
+html.light .text-neutral-900 {
+  color: #050a07 !important;
+}
+
+html.light .fill-neutral-950 {
+  fill: #050a07 !important;
+}
+
+/* Refined Inputs, Selects, and Textareas */
+input:not([type="color"]):not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  border-radius: 0.75rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:not([type="color"]):not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+}
+
+html.light input:not([type="color"]):not([type="checkbox"]):not([type="radio"]),
+html.light select,
+html.light textarea {
+  background-color: #f8fbf9;
+  border-color: #d2dfd7;
+  color: #09110d;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #6c8075;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.35);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.6);
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.97);
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+/* ============================================================================
+   SINCLY SKELETON SHIMMER & LUXURY GLASS UTILITIES
+   ============================================================================ */
+
+@keyframes shimmerWave {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+html.light .skeleton-shimmer {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    transparent 100%
+  );
+  animation: shimmerWave 1.8s infinite ease-in-out;
+}
+
+html.light .skeleton-shimmer::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.06) 50%,
+    transparent 100%
+  );
+}
+
+/* Ambient glow & glass accents */
+.glass-panel-luxury {
+  background: rgba(14, 18, 16, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.35);
+}
+
+html.light .glass-panel-luxury {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.05);
+}
+
+.glow-emerald-subtle {
+  box-shadow: 0 0 25px -4px rgba(16, 185, 129, 0.18);
+}

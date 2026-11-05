@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan to transition social media, ads, email, and CRM integrations from Sandbox/Dev Mode to Live Production Mode using an in-app OAuth 2.0 Credential & Callback URL Helper and One-Click OAuth 2.0 Popup Login for Facebook Pages, LinkedIn Pages, YouTube/Google Ads, HubSpot CRM, and SMTP Email.",
+  "updatedAt":  "2026-10-26T06:14:01.034904491Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

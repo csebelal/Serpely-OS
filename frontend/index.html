@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en" class="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Serpely AI Marketing OS — Agentic SEO for the AI-First Web</title>
+    <meta name="description" content="Autonomous multi-agent marketing operating system for Serpely. Controls 12 specialized AI agents across research, strategy, content, SEO, ads, and social media with human approval gates." />
+    <meta property="og:title" content="Serpely AI Marketing OS — Agentic SEO for the AI-First Web" />
+    <meta property="og:description" content="Autonomous multi-agent marketing operating system for Serpely. Controls 12 specialized AI agents across research, strategy, content, SEO, ads, and social media with human approval gates." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      (function() {
+        try {
+          var originalFetch = window.fetch;
+          var fetchHolder = originalFetch ? function() {
+            return originalFetch.apply(window, arguments);
+          } : undefined;
+
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            var protoDesc = Object.getOwnPropertyDescriptor(Window.prototype, 'fetch');
+            if (protoDesc && protoDesc.configurable) {
+              Object.defineProperty(Window.prototype, 'fetch', {
+                get: function() { return fetchHolder; },
+                set: function(v) { fetchHolder = v; },
+                configurable: true,
+                enumerable: true
+              });
+            }
+          }
+
+          Object.defineProperty(window, 'fetch', {
+            get: function() { return fetchHolder; },
+            set: function(v) { fetchHolder = v; },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (e) {
+          // Gracefully continue
+        }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-neutral-950 text-neutral-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

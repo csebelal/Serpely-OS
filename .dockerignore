@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+*.log
+backend/data/*.sqlite-journal
+backend/data/*.sqlite-wal
+.aistudio
+scratch

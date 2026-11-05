@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: sincly-backend
+    restart: unless-stopped
+    environment:
+      - PORT=5000
+      - BACKEND_PORT=5000
+      - APP_URL=${APP_URL:-http://localhost}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - FACEBOOK_CLIENT_ID=${FACEBOOK_CLIENT_ID}
+      - FACEBOOK_CLIENT_SECRET=${FACEBOOK_CLIENT_SECRET}
+      - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID}
+      - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    volumes:
+      # Persistent SQLite database storage on host
+      - ./backend/data:/app/backend/data
+    networks:
+      - sincly-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sincly-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - sincly-net
+
+  # (ঐচ্ছিক) Cloudflare Tunnel ডকার দিয়ে চালাতে চাইলে টোকেন দিয়ে আনকমেন্ট করুন
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: sincly-tunnel
+  #   restart: unless-stopped
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   depends_on:
+  #     - frontend
+  #   networks:
+  #     - sincly-net
+
+networks:
+  sincly-net:
+    driver: bridge
