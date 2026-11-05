@@ -172,6 +172,8 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
 
   const [liClientId, setLiClientId] = useState('');
   const [liClientSecret, setLiClientSecret] = useState('');
+  const [liPersonalClientId, setLiPersonalClientId] = useState('');
+  const [liPersonalClientSecret, setLiPersonalClientSecret] = useState('');
 
   const [googleClientId, setGoogleClientId] = useState('');
   const [googleClientSecret, setGoogleClientSecret] = useState('');
@@ -422,7 +424,9 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
     } else if (provider === 'linkedin') {
       configPayload = {
         clientId: liClientId.trim() || undefined,
-        clientSecret: liClientSecret.trim() || undefined
+        clientSecret: liClientSecret.trim() || undefined,
+        personalClientId: liPersonalClientId.trim() || undefined,
+        personalClientSecret: liPersonalClientSecret.trim() || undefined
       };
     } else if (provider === 'google') {
       configPayload = {
@@ -510,6 +514,8 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
       } else if (provider === 'linkedin') {
         setLiClientId('');
         setLiClientSecret('');
+        setLiPersonalClientId('');
+        setLiPersonalClientSecret('');
       } else if (provider === 'google') {
         setGoogleClientId('');
         setGoogleClientSecret('');
@@ -2227,24 +2233,39 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
             {/* 2. LINKEDIN FORM */}
             {activeModalProvider === 'linkedin' && (
               <div className="space-y-4 text-xs">
-                <div className="space-y-3">
+                {/* LinkedIn Policy Explanatory Callout */}
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs leading-relaxed space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <span>💡 LinkedIn Platform Policy Note</span>
+                  </div>
+                  <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                    LinkedIn does not allow <strong>Community Management API</strong> (Company Pages) and <strong>Share on LinkedIn</strong> (Personal Profiles) on the same app. For personal profiles, simply create a 2nd free app on <a href="https://www.linkedin.com/developers/apps/new" target="_blank" rel="noreferrer" className="text-cyan-400 font-bold underline hover:text-cyan-300">LinkedIn Developers</a> with <strong>Share on LinkedIn</strong> enabled!
+                  </p>
+                </div>
+
+                {/* Section A: Company / Organization App */}
+                <div className="p-3.5 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-neutral-200 text-xs">1. Company Page App (Community Management API)</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400">Company Pages</span>
+                  </div>
                   <div>
-                    <label className="block text-neutral-300 font-semibold mb-1">
-                      LinkedIn Client ID
+                    <label className="block text-neutral-400 text-[11px] font-medium mb-1">
+                      Company App Client ID
                     </label>
                     <input
                       type="text"
                       value={liClientId}
                       onChange={e => setLiClientId(e.target.value)}
                       placeholder={
-                        liveStatus?.linkedin?.clientIdMasked || 'e.g. 865hqz918xzz3'
+                        liveStatus?.linkedin?.clientIdMasked || 'e.g. 8646lnb8jy77gv'
                       }
-                      className="w-full p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-white font-mono"
+                      className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-white font-mono text-xs"
                     />
                   </div>
                   <div>
-                    <label className="block text-neutral-300 font-semibold mb-1">
-                      LinkedIn Client Secret
+                    <label className="block text-neutral-400 text-[11px] font-medium mb-1">
+                      Company App Client Secret
                     </label>
                     <input
                       type="password"
@@ -2255,11 +2276,49 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                           ? '•••••••••••••••• (Saved)'
                           : 'WPL_AP1.xxxxxxxxxxxx'
                       }
-                      className="w-full p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-white font-mono"
+                      className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Section B: Personal Profile App */}
+                <div className="p-3.5 rounded-xl bg-neutral-900/60 border border-emerald-500/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-emerald-400 text-xs">2. Personal Profile App (Share on LinkedIn + OpenID)</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/40">Personal Profiles</span>
+                  </div>
+                  <div>
+                    <label className="block text-neutral-400 text-[11px] font-medium mb-1">
+                      Personal App Client ID (From your 2nd LinkedIn App)
+                    </label>
+                    <input
+                      type="text"
+                      value={liPersonalClientId}
+                      onChange={e => setLiPersonalClientId(e.target.value)}
+                      placeholder={
+                        liveStatus?.linkedin?.personalClientIdMasked || 'e.g. 86xxxxxxxxxxxx'
+                      }
+                      className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-neutral-400 text-[11px] font-medium mb-1">
+                      Personal App Client Secret
+                    </label>
+                    <input
+                      type="password"
+                      value={liPersonalClientSecret}
+                      onChange={e => setLiPersonalClientSecret(e.target.value)}
+                      placeholder={
+                        liveStatus?.linkedin?.hasPersonalClientSecret
+                          ? '•••••••••••••••• (Saved)'
+                          : 'WPL_AP1.xxxxxxxxxxxx'
+                      }
+                      className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-white font-mono text-xs"
                     />
                   </div>
                   <p className="text-[11px] text-neutral-400">
-                    Find these in <span className="text-neutral-200">linkedin.com/developers</span> → Auth → Application credentials. Ensure the Redirect URI above is added under Authorized redirect URLs for your app.
+                    Add redirect URL in your 2nd app: <code className="text-cyan-400 bg-neutral-950 px-1.5 py-0.5 rounded">{liveStatus?.callbackUrls?.current || `${window.location.origin}/auth/callback`}</code>
                   </p>
                 </div>
               </div>

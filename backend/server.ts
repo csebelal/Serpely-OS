@@ -171,6 +171,8 @@ interface StoredLiveCredentials {
   xAccessToken?: string;
   linkedinClientId?: string;
   linkedinClientSecret?: string;
+  linkedinPersonalClientId?: string;
+  linkedinPersonalClientSecret?: string;
   linkedinAccessToken?: string;
   linkedinAuthorUrn?: string;
   googleClientId?: string;
@@ -726,6 +728,8 @@ async function startServer() {
 
       linkedinClientId: (getEnvFallback('LINKEDIN_CLIENT_ID') || creds.linkedinClientId || '').trim(),
       linkedinClientSecret: (getEnvFallback('LINKEDIN_CLIENT_SECRET') || creds.linkedinClientSecret || '').trim(),
+      linkedinPersonalClientId: (getEnvFallback('LINKEDIN_PERSONAL_CLIENT_ID') || creds.linkedinPersonalClientId || '').trim(),
+      linkedinPersonalClientSecret: (getEnvFallback('LINKEDIN_PERSONAL_CLIENT_SECRET') || creds.linkedinPersonalClientSecret || '').trim(),
       linkedinAccessToken: (getEnvFallback('LINKEDIN_ACCESS_TOKEN') || creds.linkedinAccessToken || db.oauthSessions.linkedin?.pageAccessToken || '').trim(),
       linkedinAuthorUrn: (getEnvFallback('LINKEDIN_AUTHOR_URN') || creds.linkedinAuthorUrn || db.oauthSessions.linkedin?.authorUrn || '').trim(),
 
@@ -1614,6 +1618,8 @@ async function startServer() {
         mode: (liSession.connected || live.linkedinAccessToken) && !liSession.loggedOut ? 'live' : 'sandbox',
         clientIdMasked: maskSecret(live.linkedinClientId),
         hasClientSecret: Boolean(live.linkedinClientSecret),
+        personalClientIdMasked: maskSecret(live.linkedinPersonalClientId),
+        hasPersonalClientSecret: Boolean(live.linkedinPersonalClientSecret),
         hasAccessToken: Boolean(live.linkedinAccessToken),
         connected: Boolean((liSession.connected || live.linkedinAccessToken) && !liSession.loggedOut),
         pageId: liSession.pageId || null,
@@ -2194,6 +2200,8 @@ async function startServer() {
     } else if (prov === 'linkedin') {
       if (config.clientId !== undefined) creds.linkedinClientId = String(config.clientId).trim();
       if (config.clientSecret !== undefined) creds.linkedinClientSecret = String(config.clientSecret).trim();
+      if (config.personalClientId !== undefined) creds.linkedinPersonalClientId = String(config.personalClientId).trim();
+      if (config.personalClientSecret !== undefined) creds.linkedinPersonalClientSecret = String(config.personalClientSecret).trim();
       if (config.authorUrn !== undefined && String(config.authorUrn).trim()) {
         const urn = String(config.authorUrn).trim();
         creds.linkedinAuthorUrn = urn.startsWith('urn:li:') ? urn : `urn:li:organization:${urn}`;
@@ -2260,6 +2268,8 @@ async function startServer() {
       updateEnvFile({
         LINKEDIN_CLIENT_ID: creds.linkedinClientId || '',
         LINKEDIN_CLIENT_SECRET: creds.linkedinClientSecret || '',
+        LINKEDIN_PERSONAL_CLIENT_ID: creds.linkedinPersonalClientId || '',
+        LINKEDIN_PERSONAL_CLIENT_SECRET: creds.linkedinPersonalClientSecret || '',
         LINKEDIN_ACCESS_TOKEN: creds.linkedinAccessToken || '',
         LINKEDIN_AUTHOR_URN: creds.linkedinAuthorUrn || ''
       });
@@ -3237,7 +3247,19 @@ async function startServer() {
   app.get('/api/auth/linkedin/url', (req, res) => {
     const redirectUri = resolveRedirectUri(req);
     const live = getLiveCredentials();
-    const clientId = live.linkedinClientId;
+
+    const mode = (req.query.mode as string) || 'personal'; // 'personal' or 'company'
+    const userEmail = ((req.query.userEmail as string) || '').trim().toLowerCase();
+    const explicitScope = (req.query.scope as string) || (req.query.scopes as string);
+
+    // Pick client ID: use personal app if mode is personal and personal client ID is configured
+    let clientId = live.linkedinClientId;
+    let isPersonalApp = false;
+    if (mode === 'personal' && live.linkedinPersonalClientId) {
+      clientId = live.linkedinPersonalClientId;
+      isPersonalApp = true;
+    }
+
     if (!clientId) {
       return res.json({
         sandboxMode: true,
@@ -3246,10 +3268,6 @@ async function startServer() {
         message: 'LinkedIn Client ID not configured yet. Enter your LinkedIn App Client ID & Secret in the Credential Modal.'
       });
     }
-
-    const mode = (req.query.mode as string) || 'personal'; // 'personal' or 'company'
-    const userEmail = ((req.query.userEmail as string) || '').trim().toLowerCase();
-    const explicitScope = (req.query.scope as string) || (req.query.scopes as string);
 
     // Personal Member Profile requires OpenID Connect (openid, profile, email) + Share on LinkedIn (w_member_social)
     // Company/Organization Page requires Organization Social permissions (w_organization_social r_organization_social)
@@ -3263,7 +3281,7 @@ async function startServer() {
     }
 
     const statePayload = Buffer.from(
-      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail, scope })
+      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail, scope, isPersonalApp })
     ).toString('base64url');
 
     const params = new URLSearchParams({
@@ -3285,20 +3303,28 @@ async function startServer() {
   app.get('/api/auth/linkedin/authorize', (req, res) => {
     const redirectUri = resolveRedirectUri(req);
     const live = getLiveCredentials();
-    const clientId = live.linkedinClientId;
-    if (!clientId) {
-      return res.redirect('/#settings');
-    }
 
     const mode = (req.query.mode as string) || 'personal';
     const userEmail = ((req.query.userEmail as string) || '').trim().toLowerCase();
     const explicitScope = (req.query.scope as string) || (req.query.scopes as string);
+
+    let clientId = live.linkedinClientId;
+    let isPersonalApp = false;
+    if (mode === 'personal' && live.linkedinPersonalClientId) {
+      clientId = live.linkedinPersonalClientId;
+      isPersonalApp = true;
+    }
+
+    if (!clientId) {
+      return res.redirect('/#settings');
+    }
+
     const scope = explicitScope || (mode === 'company'
       ? (process.env.LINKEDIN_SCOPES || 'w_organization_social r_organization_social')
       : 'openid profile email w_member_social');
 
     const statePayload = Buffer.from(
-      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail, scope })
+      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail, scope, isPersonalApp })
     ).toString('base64url');
 
     const params = new URLSearchParams({
@@ -3728,12 +3754,16 @@ async function startServer() {
       if (oauthError === 'unauthorized_scope_error') {
         guidanceHtml = `
           <div style="background:#221515;border:1px solid #7f1d1d;border-radius:12px;padding:16px;margin:18px 0;text-align:left;font-size:13px;line-height:1.6;color:#fecaca;">
-            <p style="font-weight:700;color:#f87171;margin:0 0 8px 0;font-size:14px;">🛠️ যেভাবে সমাধান করবেন (LinkedIn Developer Portal):</p>
+            <p style="font-weight:700;color:#f87171;margin:0 0 8px 0;font-size:14px;">⚠️ LinkedIn পলিসি সীমাবদ্ধতা ও সমাধান:</p>
+            <p style="color:#e2e8f0;margin:0 0 10px 0;">
+              যেহেতু আপনার বর্তমান LinkedIn অ্যাপে <strong>"Community Management API"</strong> সক্রিয় আছে, LinkedIn সিকিউরিটি নিয়মানুযায়ী একই অ্যাপে <strong>"Share on LinkedIn"</strong> রিকোয়েস্ট করা ব্লক থাকে।
+            </p>
+            <p style="font-weight:700;color:#38bdf8;margin:0 0 6px 0;">🛠️ ১ মিনিটে আলাদা অ্যাপ তৈরির ধাপসমূহ:</p>
             <ol style="margin:0;padding-left:20px;color:#e2e8f0;">
-              <li style="margin-bottom:6px;">ব্রাউজারে যান: <a href="https://www.linkedin.com/developers/apps/8646lnb8jy77gv/products" target="_blank" style="color:#38bdf8;font-weight:bold;text-decoration:underline;">LinkedIn Developer Portal &gt; Products</a></li>
-              <li style="margin-bottom:6px;">নিচে <strong>"Available products"</strong> থেকে <strong>"Share on LinkedIn"</strong>-এ <em>"Request access"</em> বাটনে ক্লিক করুন (এটি সঙ্গে সঙ্গে বিনামূল্যে চালু হয়ে যায়)।</li>
-              <li style="margin-bottom:6px;">পাশাপাশি <strong>"Sign In with LinkedIn using OpenID Connect"</strong> প্রোডাক্টটিও <em>"Request access"</em> করে সক্রিয় করুন।</li>
-              <li>এরপর Sincly-তে ফিরে এসে আবার <strong>"Connect Personal LinkedIn Profile"</strong>-এ ক্লিক করুন।</li>
+              <li style="margin-bottom:6px;"><a href="https://www.linkedin.com/developers/apps/new" target="_blank" style="color:#38bdf8;font-weight:bold;text-decoration:underline;">LinkedIn Developer Portal &gt; Create App</a>-এ যান এবং ব্যক্তিগত শেয়ারের জন্য আরেকটি ফ্রি অ্যাপ তৈরি করুন (যেমন: <em>Sincly Personal</em>)।</li>
+              <li style="margin-bottom:6px;">নতুন অ্যাপের <strong>Products</strong> ট্যাবে গিয়ে <strong>"Share on LinkedIn"</strong> এবং <strong>"Sign In with LinkedIn using OpenID Connect"</strong>-এ <em>Request access</em> দিন (এখানে কোনো বাধা ছাড়া ইনস্ট্যান্ট অ্যাপ্রুভ হবে)।</li>
+              <li style="margin-bottom:6px;">নতুন অ্যাপের <strong>Auth</strong> ট্যাবে <strong>Authorized redirect URLs for your app</strong>-এ যোগ করুন:<br/><code style="background:#0f172a;color:#38bdf8;padding:2px 6px;border-radius:4px;display:inline-block;margin-top:4px;">${redirectUri}</code></li>
+              <li>নতুন অ্যাপের Client ID ও Secret দিয়ে Sincly-তে সেভ করে আবার কানেক্ট করুন।</li>
             </ol>
           </div>
         `;
@@ -3836,19 +3866,23 @@ async function startServer() {
     const googleSession = db.oauthSessions.google;
     const hubspotSession = db.oauthSessions.hubspot;
 
+    const isPersonalApp = Boolean(decoded?.isPersonalApp);
+    const liClientId = (isPersonalApp && live.linkedinPersonalClientId) ? live.linkedinPersonalClientId : live.linkedinClientId;
+    const liClientSecret = (isPersonalApp && live.linkedinPersonalClientSecret) ? live.linkedinPersonalClientSecret : live.linkedinClientSecret;
+
     // 1) Real LinkedIn OAuth 2.0 Code-to-Token Exchange & Page Scraping
     if (
       provider === 'LinkedIn' &&
       code &&
-      live.linkedinClientId &&
-      live.linkedinClientSecret
+      liClientId &&
+      liClientSecret
     ) {
       try {
         const bodyParams = new URLSearchParams({
           grant_type: 'authorization_code',
           code,
-          client_id: live.linkedinClientId,
-          client_secret: live.linkedinClientSecret,
+          client_id: liClientId,
+          client_secret: liClientSecret,
           redirect_uri: redirectUri
         });
 
