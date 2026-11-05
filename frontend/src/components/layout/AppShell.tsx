@@ -184,6 +184,8 @@ export const AppShell: React.FC = () => {
     website: '',
     industry: '',
     description: '',
+    tagline: 'Autonomous AI Growth & Marketing Engine',
+    mission: 'Scale revenue and brand authority through autonomous AI marketing orchestration.',
     voiceTone: 'Professional, Engaging & Authoritative',
     targetAudience: '',
     keyThemes: [],
@@ -191,7 +193,7 @@ export const AppShell: React.FC = () => {
   });
   const [agents, setAgents] = useState<AgentInfo[]>(mockAgents);
   const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
-  const [geoScore, setGeoScore] = useState<GeoScoreData>({ overallScore: 0, breakdowns: [] });
+  const [geoScore, setGeoScore] = useState<GeoScoreData>({ overallScore: 0, breakdowns: [] } as any);
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [contentList, setContentList] = useState<ContentItem[]>([]);
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);

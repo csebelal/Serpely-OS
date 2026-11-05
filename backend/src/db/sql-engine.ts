@@ -278,6 +278,28 @@ const TABLE_DEFINITIONS: {
       value_json TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`
+  },
+  {
+    name: 'user_workspaces',
+    createSql: `CREATE TABLE IF NOT EXISTS user_workspaces (
+      user_email TEXT PRIMARY KEY,
+      workspace_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`
+  },
+  {
+    name: 'users',
+    createSql: `CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password TEXT,
+      role TEXT NOT NULL DEFAULT 'owner',
+      title TEXT,
+      initials TEXT,
+      payload_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`
   }
 ];
 
@@ -1436,3 +1458,171 @@ export async function syncWorkspaceToSql(dbState: any): Promise<void> {
     console.error('Error syncing workspace to SQL database:', err);
   }
 }
+
+export async function readUserWorkspaceFromSql(userEmail: string): Promise<any | null> {
+  const normEmail = (userEmail || '').trim().toLowerCase();
+  if (!normEmail) return null;
+
+  if (activeEngine === 'postgres' && pgPool) {
+    try {
+      const res = await pgPool.query(
+        'SELECT workspace_json FROM user_workspaces WHERE LOWER(user_email) = LOWER($1)',
+        [normEmail]
+      );
+      if (res.rows && res.rows.length > 0 && res.rows[0].workspace_json) {
+        return JSON.parse(String(res.rows[0].workspace_json));
+      }
+    } catch (err) {
+      console.warn(`[SQL Engine] Failed reading workspace for ${normEmail} from Postgres:`, err);
+    }
+  }
+
+  if (sqliteDb) {
+    try {
+      const stmt = sqliteDb.prepare(
+        'SELECT workspace_json FROM user_workspaces WHERE LOWER(user_email) = LOWER(?)'
+      );
+      stmt.bind([normEmail]);
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        stmt.free();
+        if (typeof row.workspace_json === 'string' && row.workspace_json.trim()) {
+          return JSON.parse(row.workspace_json);
+        }
+      } else {
+        stmt.free();
+      }
+    } catch (err) {
+      console.warn(`[SQL Engine] Failed reading workspace for ${normEmail} from SQLite:`, err);
+    }
+  }
+
+  return null;
+}
+
+export async function writeUserWorkspaceToSql(userEmail: string, workspaceData: any): Promise<void> {
+  const normEmail = (userEmail || '').trim().toLowerCase();
+  if (!normEmail || !workspaceData) return;
+
+  const nowIso = new Date().toISOString();
+  const jsonStr = JSON.stringify(workspaceData);
+
+  if (sqliteDb) {
+    try {
+      const stmt = sqliteDb.prepare(
+        `INSERT OR REPLACE INTO user_workspaces (user_email, workspace_json, updated_at) VALUES (?, ?, ?)`
+      );
+      stmt.run([normEmail, jsonStr, nowIso]);
+      stmt.free();
+      persistSqliteToDisk();
+    } catch (err) {
+      console.error(`[SQL Engine] Error saving workspace for ${normEmail} to SQLite:`, err);
+    }
+  }
+
+  if (activeEngine === 'postgres' && pgPool) {
+    try {
+      await pgPool.query(
+        `INSERT INTO user_workspaces (user_email, workspace_json, updated_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_email) DO UPDATE
+         SET workspace_json = EXCLUDED.workspace_json,
+             updated_at = EXCLUDED.updated_at`,
+        [normEmail, jsonStr, nowIso]
+      );
+    } catch (err) {
+      console.error(`[SQL Engine] Error saving workspace for ${normEmail} to Postgres:`, err);
+    }
+  }
+}
+
+export async function readAllUserWorkspacesFromSql(): Promise<Record<string, any>> {
+  const result: Record<string, any> = {};
+
+  if (sqliteDb) {
+    try {
+      const stmt = sqliteDb.prepare('SELECT user_email, workspace_json FROM user_workspaces');
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        const email = String(row.user_email || '').trim().toLowerCase();
+        if (email && typeof row.workspace_json === 'string') {
+          try {
+            result[email] = JSON.parse(row.workspace_json);
+          } catch {}
+        }
+      }
+      stmt.free();
+    } catch (err) {
+      console.warn('[SQL Engine] Error listing user workspaces from SQLite:', err);
+    }
+  }
+
+  if (activeEngine === 'postgres' && pgPool) {
+    try {
+      const res = await pgPool.query('SELECT user_email, workspace_json FROM user_workspaces');
+      for (const row of res.rows || []) {
+        const email = String(row.user_email || '').trim().toLowerCase();
+        if (email && row.workspace_json) {
+          try {
+            result[email] = JSON.parse(String(row.workspace_json));
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.warn('[SQL Engine] Error listing user workspaces from Postgres:', err);
+    }
+  }
+
+  return result;
+}
+
+export async function readAllUsersFromSql(): Promise<any[]> {
+  const users: any[] = [];
+
+  if (sqliteDb) {
+    try {
+      const stmt = sqliteDb.prepare('SELECT payload_json FROM users');
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        if (typeof row.payload_json === 'string') {
+          try {
+            users.push(JSON.parse(row.payload_json));
+          } catch {}
+        }
+      }
+      stmt.free();
+    } catch (err) {
+      console.warn('[SQL Engine] Error reading users from SQLite:', err);
+    }
+  }
+
+  return users;
+}
+
+export async function writeUserToSql(user: any): Promise<void> {
+  if (!user || !user.email) return;
+  const normEmail = String(user.email).trim().toLowerCase();
+  const nowIso = new Date().toISOString();
+  const id = String(user.id || `usr-${Date.now()}`);
+  const name = String(user.name || 'User');
+  const password = String(user.password || '');
+  const role = String(user.role || 'owner');
+  const title = String(user.title || '');
+  const initials = String(user.initials || 'U');
+  const payloadJson = JSON.stringify(user);
+
+  if (sqliteDb) {
+    try {
+      const stmt = sqliteDb.prepare(
+        `INSERT OR REPLACE INTO users (id, name, email, password, role, title, initials, payload_json, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      stmt.run([id, name, normEmail, password, role, title, initials, payloadJson, nowIso]);
+      stmt.free();
+      persistSqliteToDisk();
+    } catch (err) {
+      console.error(`[SQL Engine] Error saving user ${normEmail} to SQLite:`, err);
+    }
+  }
+}
+

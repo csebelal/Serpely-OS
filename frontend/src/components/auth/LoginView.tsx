@@ -105,6 +105,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
         saveCustomUser(newUser);
 
+        // Register user and initialize isolated workspace on backend
+        fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newUser)
+        }).catch(err => console.warn('[Auth] Backend user registration sync:', err));
+
         if (rememberMe) {
           try {
             localStorage.setItem('serpely_authenticated_user', JSON.stringify(newUser));

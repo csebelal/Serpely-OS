@@ -1,5 +1,7 @@
 import { UserRole, AuthUser, RolePermissionConfig } from '../types';
 
+export type { AuthUser, UserRole, RolePermissionConfig };
+
 export const DEFAULT_ADMIN_USER: AuthUser = {
   id: 'usr-admin-01',
   name: 'Serpely Support',
@@ -18,6 +20,24 @@ export const DEFAULT_ADMIN_USER: AuthUser = {
 };
 
 export const DEFAULT_ADMIN_PASSWORD = '123454321';
+
+export const DEFAULT_BELAL_USER: RegisteredUserRecord = {
+  id: 'usr-belal-01',
+  name: 'Belal Hossain',
+  email: 'csebelal9@gmail.com',
+  password: '123',
+  role: 'owner',
+  title: 'Founder & CEO',
+  initials: 'BH',
+  permissions: {
+    canManageSettings: true,
+    canManageApiKeys: true,
+    canApproveSpends: true,
+    canCreateAssets: true,
+    canPublishLive: true,
+    isReadOnly: false
+  }
+};
 
 export const BASE_ROLE_CONFIGS: Record<string, RolePermissionConfig> = {
   owner: {
@@ -87,22 +107,26 @@ export const getStoredRoles = (): Record<string, RolePermissionConfig> => {
 };
 
 export const getStoredUsers = (): RegisteredUserRecord[] => {
+  const baseUsers: RegisteredUserRecord[] = [
+    { ...DEFAULT_ADMIN_USER, password: DEFAULT_ADMIN_PASSWORD },
+    DEFAULT_BELAL_USER
+  ];
   try {
     const raw = localStorage.getItem('serpely_registered_users');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const hasAdmin = parsed.some(
-          u => u.email && u.email.toLowerCase() === DEFAULT_ADMIN_USER.email.toLowerCase()
-        );
-        if (!hasAdmin) {
-          return [{ ...DEFAULT_ADMIN_USER, password: DEFAULT_ADMIN_PASSWORD }, ...parsed];
+        const merged = [...parsed];
+        for (const bu of baseUsers) {
+          if (!merged.some(u => u.email && u.email.toLowerCase() === bu.email.toLowerCase())) {
+            merged.unshift(bu);
+          }
         }
-        return parsed;
+        return merged;
       }
     }
   } catch {}
-  return [{ ...DEFAULT_ADMIN_USER, password: DEFAULT_ADMIN_PASSWORD }];
+  return baseUsers;
 };
 
 export const saveCustomRole = (config: RolePermissionConfig) => {

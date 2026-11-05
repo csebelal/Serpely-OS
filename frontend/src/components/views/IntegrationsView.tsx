@@ -18,6 +18,7 @@ import {
   Lock,
   Info,
   X,
+  Plus,
   Trash2,
   Terminal,
   Webhook
@@ -236,6 +237,56 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
       showBanner(`Connector test failed: ${err.message}`, 'error');
     } finally {
       setTestingConnector(false);
+    }
+  };
+
+  // LinkedIn Multi-Page Discovery & Direct Add Handlers
+  const [isResyncingLi, setIsResyncingLi] = useState(false);
+  const [showAddLiModal, setShowAddLiModal] = useState(false);
+  const [liPageQuery, setLiPageQuery] = useState('');
+  const [isAddingLiPage, setIsAddingLiPage] = useState(false);
+
+  const handleResyncLinkedInPages = async () => {
+    setIsResyncingLi(true);
+    try {
+      const res = await fetch('/api/social/linkedin/resync-pages', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showBanner(`Successfully discovered and synced ${data.scrapedCount} LinkedIn company page(s)!`, 'success');
+        fetchLiveStatus();
+      } else {
+        showBanner(data.message || data.error || 'No additional LinkedIn pages found', 'warning');
+      }
+    } catch (err: any) {
+      showBanner(`Re-sync error: ${err.message}`, 'error');
+    } finally {
+      setIsResyncingLi(false);
+    }
+  };
+
+  const handleLookupLinkedInPage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!liPageQuery.trim()) return;
+    setIsAddingLiPage(true);
+    try {
+      const res = await fetch('/api/social/linkedin/lookup-page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: liPageQuery.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showBanner(`Successfully linked LinkedIn page: ${data.page?.pageName || 'New Company Page'}!`, 'success');
+        setLiPageQuery('');
+        setShowAddLiModal(false);
+        fetchLiveStatus();
+      } else {
+        showBanner(data.error || 'Failed to find LinkedIn page', 'error');
+      }
+    } catch (err: any) {
+      showBanner(`Add page error: ${err.message}`, 'error');
+    } finally {
+      setIsAddingLiPage(false);
     }
   };
 
@@ -987,46 +1038,93 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
 
                 {/* Scraped LinkedIn Pages List & Selector */}
                 {(() => {
-                  const liPages = (liveStatus?.connectedPages || []).filter(p => p.platform === 'LinkedIn');
-                  if (liPages.length === 0) return null;
+                  const rawPages = (liveStatus?.connectedPages || []).filter(p =>
+                    p.platform === 'LinkedIn' &&
+                    p.id !== 'page-li-org-1' &&
+                    p.id !== 'page-li-tech-sheba' &&
+                    p.id !== 'page-li-corp-107099137' &&
+                    p.externalPageId !== 'urn:li:organization:1' &&
+                    p.externalPageId !== 'ext-li-syn-1'
+                  );
+
+                  // Deduplicate by externalPageId
+                  const seen = new Set<string>();
+                  const liPages = rawPages.filter(p => {
+                    const key = p.externalPageId || p.id;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                  });
+
                   return (
                     <div className="pt-2 border-t border-neutral-800/80 space-y-1.5">
                       <div className="text-[10px] font-mono uppercase text-neutral-400 font-semibold flex items-center justify-between">
                         <span>Scraped Accounts ({liPages.length})</span>
-                        <span className="text-emerald-400 font-normal">Click to switch</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleResyncLinkedInPages}
+                            disabled={isResyncingLi}
+                            className="text-sky-400 hover:text-sky-300 font-normal flex items-center gap-1 text-[10px] transition-colors cursor-pointer"
+                            title="Re-query LinkedIn API for all authorized company pages"
+                          >
+                            <RefreshCw className={`h-2.5 w-2.5 ${isResyncingLi ? 'animate-spin' : ''}`} />
+                            <span>{isResyncingLi ? 'Syncing...' : 'Re-sync'}</span>
+                          </button>
+                          <span className="text-neutral-700">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddLiModal(true)}
+                            className="text-emerald-400 hover:text-emerald-300 font-normal flex items-center gap-0.5 text-[10px] transition-colors cursor-pointer"
+                            title="Add any LinkedIn Company Page by ID or Vanity URL"
+                          >
+                            <Plus className="h-2.5 w-2.5" />
+                            <span>Add Page</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
-                        {liPages.map(pg => {
-                          const isActive = pg.isSelected || (liveStatus?.linkedin?.authorUrn === pg.externalPageId || liveStatus?.linkedin?.pageId === pg.externalPageId);
-                          return (
-                            <button
-                              key={pg.id}
-                              onClick={() => handleSelectActivePage(pg.id)}
-                              className={`w-full text-left p-1.5 rounded-lg text-[11px] flex items-center justify-between gap-2 border transition-all ${
-                                isActive
-                                  ? 'bg-emerald-500/15 border-emerald-500/40 text-white font-semibold'
-                                  : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800'
-                              }`}
-                            >
-                              <div className="truncate min-w-0">
-                                <span className="truncate block">{pg.pageName}</span>
-                                <span className="text-[9px] font-mono text-neutral-400">
-                                  {pg.category || 'Profile'}
-                                </span>
-                              </div>
-                              {isActive ? (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500 text-neutral-950 font-bold shrink-0">
-                                  ACTIVE
-                                </span>
-                              ) : (
-                                <span className="text-[9px] text-neutral-400 hover:text-emerald-400 shrink-0">
-                                  Select
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
+
+                      {liPages.length === 0 ? (
+                        <div className="text-[11px] text-neutral-500 py-1.5 italic bg-neutral-900/50 px-2 rounded-lg border border-dashed border-neutral-800">
+                          No company pages discovered yet. Click &apos;Company Page&apos; below or &apos;Add Page&apos; to link.
+                        </div>
+                      ) : (
+                        <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                          {liPages.map(pg => {
+                            const isActive = pg.isSelected || (liveStatus?.linkedin?.authorUrn === pg.externalPageId || liveStatus?.linkedin?.pageId === pg.externalPageId);
+                            return (
+                              <button
+                                key={pg.id}
+                                onClick={() => handleSelectActivePage(pg.id)}
+                                className={`w-full text-left p-1.5 rounded-lg text-[11px] flex items-center justify-between gap-2 border transition-all ${
+                                  isActive
+                                    ? 'bg-sky-500/15 border-sky-500/40 text-white font-semibold'
+                                    : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800'
+                                }`}
+                              >
+                                <div className="truncate min-w-0">
+                                  <span className="truncate block font-medium">{pg.pageName}</span>
+                                  <div className="flex items-center gap-1.5 text-[9px] font-mono text-neutral-400">
+                                    <span>{pg.category || 'Company Page'}</span>
+                                    {typeof pg.followersCount === 'number' && pg.followersCount > 0 && (
+                                      <span>• {pg.followersCount.toLocaleString()} followers</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {isActive ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-500 text-neutral-950 font-bold shrink-0">
+                                    ACTIVE
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-neutral-400 hover:text-sky-400 shrink-0">
+                                    Select
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -2702,6 +2800,69 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LinkedIn Add Page Modal */}
+      {showAddLiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-neutral-800/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-sky-600/20 text-sky-400 font-bold flex items-center justify-center text-xs border border-sky-500/30">
+                  in
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">Add LinkedIn Company Page</h3>
+                  <p className="text-[11px] text-neutral-400">Link by Organization ID, Vanity Handle, or Page URL</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddLiModal(false)}
+                className="text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleLookupLinkedInPage} className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-neutral-300 block mb-1.5">
+                  Page Vanity Name, Numeric ID, or URL
+                </label>
+                <input
+                  type="text"
+                  value={liPageQuery}
+                  onChange={(e) => setLiPageQuery(e.target.value)}
+                  placeholder="e.g. yosuite or 106511394 or https://linkedin.com/company/yosuite"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-sky-500/60"
+                  autoFocus
+                />
+                <p className="text-[10px] text-neutral-500 mt-1.5">
+                  The connected LinkedIn account must have administrator or editor permissions on this company page.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800/80">
+                <button
+                  type="button"
+                  onClick={() => setShowAddLiModal(false)}
+                  className="px-4 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingLiPage || !liPageQuery.trim()}
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-sky-600/20"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>{isAddingLiPage ? 'Verifying...' : 'Link Page'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

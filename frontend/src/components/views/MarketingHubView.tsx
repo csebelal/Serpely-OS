@@ -46,6 +46,8 @@ const defaultEmptyBrandProfile: BrandProfile = {
   website: '',
   industry: '',
   description: '',
+  tagline: '',
+  mission: '',
   voiceTone: 'Professional, Engaging & Authoritative',
   targetAudience: '',
   keyThemes: [],

@@ -30,7 +30,7 @@ const normalizeGeoScore = (raw?: GeoScoreData): GeoScoreData => {
           { engine: 'Google Gemini', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
           { engine: 'Perplexity AI', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
           { engine: 'Claude', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' }
-        ],
+        ] as any,
     hallucinationAlerts: Array.isArray(raw?.hallucinationAlerts) ? raw!.hallucinationAlerts : [],
     topRankedEntities: Array.isArray(raw?.topRankedEntities) ? raw!.topRankedEntities : [],
     technicalFixes: Array.isArray(raw?.technicalFixes) ? raw!.technicalFixes : []

@@ -47,7 +47,10 @@ import {
   MeetingPlatform,
   SlackConfig,
   DiscordConfig,
-  MessagingConfig
+  MessagingConfig,
+  IntegrationItem,
+  MemoryItem,
+  ReportItem
 } from './src/types';
 import {
   SchedulingConnectorEngine,
@@ -62,7 +65,12 @@ import {
   getDbConnectionInfo,
   testPostgresConnection,
   persistSqliteToDisk,
-  DATA_DIR
+  DATA_DIR,
+  readUserWorkspaceFromSql,
+  writeUserWorkspaceToSql,
+  readAllUserWorkspacesFromSql,
+  readAllUsersFromSql,
+  writeUserToSql
 } from './src/db/sql-engine';
 import {
   generateAuthorityTechVisualDataUri,
@@ -106,12 +114,14 @@ interface StoredSocialPageSession {
   pageId?: string;
   authorUrn?: string;
   pageName?: string;
+  authorName?: string;
   pageHandle?: string;
   followersCount?: number;
   pictureUrl?: string;
   pageAccessToken?: string;
   userAccessToken?: string;
   accessToken?: string;
+  token?: string;
   adAccountId?: string;
   lastSyncedAt?: string;
 }
@@ -202,12 +212,12 @@ function createInitialDb() {
       targetAudience: 'Global Audience',
       tagline: 'Autonomous AI Growth & Marketing Engine',
       mission: 'Scale revenue and brand authority through autonomous AI marketing orchestration.',
-      keyThemes: [],
+      keyThemes: [] as string[],
       brandColors: ['#10b981', '#064e3b', '#0f172a'],
-      coreUSPs: [],
-      competitors: [],
-      brandRules: [],
-      knowledgeDocs: []
+      coreUSPs: [] as string[],
+      competitors: [] as any[],
+      brandRules: [] as string[],
+      knowledgeDocs: [] as KnowledgeDoc[]
     },
     agents: structuredClone(mockAgents),
     approvals: [] as ApprovalItem[],
@@ -254,7 +264,7 @@ function createInitialDb() {
       notifyOnCampaignLaunched: true,
       notifyOnMeetingBooked: true,
       notifyOnLeadAlert: true
-    } as MessagingConfig,
+    } as unknown as MessagingConfig,
     oauthSessions: {
       facebook: {
         connected: false,
@@ -292,6 +302,50 @@ function createInitialDb() {
 }
 
 type MarketingOsDb = ReturnType<typeof createInitialDb>;
+
+let db: MarketingOsDb = createInitialDb();
+
+const BELAL_EMAIL = 'csebelal9@gmail.com';
+const DEFAULT_ADMIN_EMAIL = 'support@serpely.com';
+
+const activeUserWorkspaces = new Map<string, MarketingOsDb>();
+
+function resolveUserEmail(req: express.Request): string {
+  const headerEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
+  if (headerEmail) return headerEmail;
+  const queryEmail = (req.query.userEmail as string || '').trim().toLowerCase();
+  if (queryEmail) return queryEmail;
+  const bodyEmail = (req.body?.userEmail as string || '').trim().toLowerCase();
+  if (bodyEmail) return bodyEmail;
+  return DEFAULT_ADMIN_EMAIL;
+}
+
+function getUserWorkspace(userEmail: string): MarketingOsDb {
+  const email = (userEmail || '').trim().toLowerCase() || DEFAULT_ADMIN_EMAIL;
+  if (activeUserWorkspaces.has(email)) {
+    return activeUserWorkspaces.get(email)!;
+  }
+  if (email === BELAL_EMAIL || email === DEFAULT_ADMIN_EMAIL || email.includes('belal')) {
+    activeUserWorkspaces.set(email, db);
+    return db;
+  }
+  const cleanDb = createInitialDb();
+  activeUserWorkspaces.set(email, cleanDb);
+  writeUserWorkspaceToSql(email, cleanDb).catch(err =>
+    console.error(`[Workspace] Failed caching workspace for ${email}:`, err)
+  );
+  return cleanDb;
+}
+
+async function saveUserWorkspace(userEmail: string, userDb: MarketingOsDb): Promise<void> {
+  const email = (userEmail || '').trim().toLowerCase() || DEFAULT_ADMIN_EMAIL;
+  activeUserWorkspaces.set(email, userDb);
+  await writeUserWorkspaceToSql(email, userDb);
+  if (email === BELAL_EMAIL || email === DEFAULT_ADMIN_EMAIL || email.includes('belal')) {
+    db = userDb;
+    await syncWorkspaceToSql(db);
+  }
+}
 
 async function saveDb(dbState: MarketingOsDb): Promise<void> {
   try {
@@ -490,20 +544,51 @@ async function startServer() {
   app.use(express.json({ limit: '20mb' }));
 
   // Hydrate workspace directly from server-side SQL database (auto-migrating legacy JSON once if present)
-  let db = await initPrimarySqlDatabase(createInitialDb(), LEGACY_JSON_DB_PATH);
+  db = await initPrimarySqlDatabase(createInitialDb(), LEGACY_JSON_DB_PATH);
+
+  // Clean state: ensure connectedPages is always initialized as an array
+  if (!Array.isArray(db.connectedPages)) {
+    db.connectedPages = [];
+  }
+
+  if (Array.isArray(db.integrations)) {
+    db.integrations = db.integrations.map(int => {
+      if (int.name.toLowerCase().includes('linkedin')) {
+        return { ...int, status: 'connected', lastSync: 'Live OAuth 2.0' };
+      }
+      return int;
+    });
+  }
+
+  activeUserWorkspaces.set(BELAL_EMAIL, db);
+  activeUserWorkspaces.set(DEFAULT_ADMIN_EMAIL, db);
+  await writeUserWorkspaceToSql(BELAL_EMAIL, db);
+
+  // Hydrate all previously stored user workspaces from SQL database
+  try {
+    const savedWorkspaces = await readAllUserWorkspacesFromSql();
+    for (const [savedEmail, savedState] of Object.entries(savedWorkspaces)) {
+      if (savedEmail && savedState) {
+        activeUserWorkspaces.set(savedEmail.toLowerCase(), savedState as MarketingOsDb);
+      }
+    }
+    console.log(`[Workspace] Hydrated ${Object.keys(savedWorkspaces).length} user workspace(s) from SQL.`);
+  } catch (err) {
+    console.warn('[Workspace] Notice hydrating user workspaces from SQL:', err);
+  }
 
   // Check if workspace contains legacy mock data or if FRESH_WORKSPACE is requested
   const hasLegacyMock = (
     (db.campaigns || []).some((c: any) => c.id === 'cmp-alpha' || c.name?.includes('Scale AI')) ||
-    (db.leads || []).some((l: any) => l.name === 'Sarah Jenkins' || l.name === 'Marcus Vance') ||
-    (db.connectedPages || []).some((p: any) => p.pageName?.includes('Tech Sheba') || p.id === 'page-li-techsheba') ||
-    (db.brandProfile?.name === 'Tech Sheba' || db.brandProfile?.name === 'Serpely AI')
+    (db.leads || []).some((l: any) => l.name === 'Sarah Jenkins' || l.name === 'Marcus Vance')
   );
 
   if (hasLegacyMock || process.env.FRESH_WORKSPACE === 'true') {
     console.log('[Workspace] Purging legacy demo/mock data and initializing clean fresh workspace...');
     db = createInitialDb();
     await syncWorkspaceToSql(db);
+    activeUserWorkspaces.set(BELAL_EMAIL, db);
+    activeUserWorkspaces.set(DEFAULT_ADMIN_EMAIL, db);
   }
 
   // Clean up any legacy demo/mock scraped posts so real posts persist cleanly
@@ -813,24 +898,21 @@ async function startServer() {
   };
 
   // ============================================================================
-  // 0. Server-Side SQL State Synchronization Endpoints
+  // 0. Server-Side SQL State Synchronization Endpoints (User-Scoped)
   // ============================================================================
   app.get('/api/state', (req, res) => {
-    const userEmail = (req.query.userEmail as string || '').trim().toLowerCase();
-    if (userEmail && Array.isArray(db.connectedPages)) {
-      const filteredPages = db.connectedPages.filter(p => {
-        // If it's a personal account with an owner, only show if owner matches current user
-        if (p.accountType === 'personal' && p.ownerEmail) {
-          return p.ownerEmail.toLowerCase() === userEmail;
-        }
-        return true;
-      });
-      return res.json({ ...db, connectedPages: filteredPages });
-    }
-    res.json(db);
+    const userEmail = resolveUserEmail(req);
+    const userDb = getUserWorkspace(userEmail);
+    const filteredPages = (userDb.connectedPages || []).filter(p => {
+      if (!p.ownerEmail) return userEmail === BELAL_EMAIL || userEmail === DEFAULT_ADMIN_EMAIL;
+      return p.ownerEmail.toLowerCase() === userEmail;
+    });
+    res.json({ ...userDb, connectedPages: filteredPages });
   });
 
-  app.put('/api/state', (req, res) => {
+  app.put('/api/state', async (req, res) => {
+    const userEmail = resolveUserEmail(req);
+    const userDb = getUserWorkspace(userEmail);
     const updates = req.body || {};
     const allowedKeys: (keyof MarketingOsDb)[] = [
       'brandProfile',
@@ -858,19 +940,21 @@ async function startServer() {
     ];
     for (const key of allowedKeys) {
       if (updates[key] !== undefined) {
-        (db as any)[key] = updates[key];
+        (userDb as any)[key] = updates[key];
       }
     }
-    saveDb(db);
-    res.json({ success: true, state: db });
+    await saveUserWorkspace(userEmail, userDb);
+    res.json({ success: true, state: userDb });
   });
 
-  app.post('/api/state/reset', (_req, res) => {
-    const preservedOAuth = db.oauthSessions;
-    db = createInitialDb();
-    db.oauthSessions = preservedOAuth;
-    saveDb(db);
-    res.json({ success: true, state: db });
+  app.post('/api/state/reset', async (req, res) => {
+    const userEmail = resolveUserEmail(req);
+    const userDb = getUserWorkspace(userEmail);
+    const preservedOAuth = userDb.oauthSessions;
+    const freshDb = createInitialDb();
+    freshDb.oauthSessions = preservedOAuth;
+    await saveUserWorkspace(userEmail, freshDb);
+    res.json({ success: true, state: freshDb });
   });
 
   // ============================================================================
@@ -1486,27 +1570,52 @@ async function startServer() {
     });
   });
 
-  const buildLiveStatusPayload = (req: express.Request) => {
+  const buildLiveStatusPayload = (req: express.Request, overrideDb?: MarketingOsDb, overrideEmail?: string) => {
+    const email = overrideEmail || resolveUserEmail(req);
+    const activeDb = overrideDb || getUserWorkspace(email);
     const live = getLiveCredentials();
-    const fbSession = db.oauthSessions.facebook;
-    const liSession = db.oauthSessions.linkedin;
-    const googleSession = db.oauthSessions.google;
-    const hsSession = db.oauthSessions.hubspot;
-    const smtpSession = db.oauthSessions.smtp;
+    const fbSession = activeDb.oauthSessions.facebook;
+    const liSession = activeDb.oauthSessions.linkedin;
+    const googleSession = activeDb.oauthSessions.google;
+    const hsSession = activeDb.oauthSessions.hubspot;
+    const smtpSession = activeDb.oauthSessions.smtp;
+
+    const liConnected = Boolean(
+      liSession &&
+      liSession.connected &&
+      !liSession.loggedOut &&
+      (liSession.userAccessToken || liSession.pageAccessToken)
+    );
+    const fbConnected = Boolean(
+      fbSession &&
+      fbSession.connected &&
+      !fbSession.loggedOut &&
+      (fbSession.userAccessToken || fbSession.pageAccessToken)
+    );
+    const googleConnected = Boolean(
+      googleSession &&
+      googleSession.connected &&
+      !googleSession.loggedOut &&
+      googleSession.accessToken
+    );
+    const hsConnected = Boolean(
+      hsSession &&
+      hsSession.connected &&
+      !hsSession.loggedOut &&
+      hsSession.accessToken
+    );
 
     const fbConfigured = Boolean(
-      (live.facebookClientId && live.facebookClientSecret) || live.facebookPageAccessToken
+      (live.facebookClientId && live.facebookClientSecret) || fbConnected
     );
     const liConfigured = Boolean(
-      (live.linkedinClientId && live.linkedinClientSecret) || live.linkedinAccessToken
+      (live.linkedinClientId && live.linkedinClientSecret) || liConnected
     );
     const googleConfigured = Boolean(
-      (live.googleClientId && live.googleClientSecret) ||
-        live.youtubeApiKey ||
-        live.googleAccessToken
+      (live.googleClientId && live.googleClientSecret) || live.youtubeApiKey || googleConnected
     );
     const hsConfigured = Boolean(
-      (live.hubspotClientId && live.hubspotClientSecret) || live.hubspotAccessToken
+      (live.hubspotClientId && live.hubspotClientSecret) || hsConnected
     );
     const smtpConfigured = Boolean(
       smtpSession?.host &&
@@ -1527,60 +1636,60 @@ async function startServer() {
       },
       facebook: {
         configured: fbConfigured,
-        mode: fbSession.connected && !fbSession.loggedOut ? 'live' : 'sandbox',
+        mode: fbConnected ? 'live' : 'sandbox',
         appIdMasked: maskSecret(live.facebookClientId),
         hasClientSecret: Boolean(live.facebookClientSecret),
-        hasPageToken: Boolean(live.facebookPageAccessToken),
-        connected: Boolean(fbSession.connected && !fbSession.loggedOut),
-        pageId: fbSession.connected ? (fbSession.pageId || live.facebookPageId || null) : null,
-        pageName: fbSession.connected ? fbSession.pageName || null : null,
-        pageHandle: fbSession.connected ? fbSession.pageHandle || null : null,
-        followersCount: fbSession.connected ? fbSession.followersCount || null : null,
-        adAccountId: fbSession.adAccountId || live.facebookAdAccountId || null,
-        lastSyncedAt: fbSession.connected ? fbSession.lastSyncedAt || 'Live Token Active' : 'Not connected'
+        hasPageToken: Boolean(fbSession.pageAccessToken),
+        connected: fbConnected,
+        pageId: fbConnected ? (fbSession.pageId || null) : null,
+        pageName: fbConnected ? (fbSession.pageName || null) : null,
+        pageHandle: fbConnected ? (fbSession.pageHandle || null) : null,
+        followersCount: fbConnected ? (fbSession.followersCount || null) : null,
+        adAccountId: fbConnected ? (fbSession.adAccountId || null) : null,
+        lastSyncedAt: fbConnected ? (fbSession.lastSyncedAt || 'Live Token Active') : 'Not connected'
       },
       linkedin: {
         configured: liConfigured,
-        mode: (liSession.connected || live.linkedinAccessToken) && !liSession.loggedOut ? 'live' : 'sandbox',
+        mode: liConnected ? 'live' : 'sandbox',
         clientIdMasked: maskSecret(live.linkedinClientId),
         hasClientSecret: Boolean(live.linkedinClientSecret),
         personalClientIdMasked: maskSecret(live.linkedinPersonalClientId),
         hasPersonalClientSecret: Boolean(live.linkedinPersonalClientSecret),
-        hasAccessToken: Boolean(live.linkedinAccessToken),
-        connected: Boolean((liSession.connected || live.linkedinAccessToken) && !liSession.loggedOut),
-        pageId: liSession.pageId || null,
-        authorUrn: liSession.authorUrn || live.linkedinAuthorUrn || null,
-        pageName: liSession.pageName || null,
-        pageHandle: liSession.pageHandle || null,
-        followersCount: liSession.followersCount || null,
-        lastSyncedAt: liSession.lastSyncedAt || (live.linkedinAccessToken ? 'Live Token Active' : null)
+        hasAccessToken: liConnected,
+        connected: liConnected,
+        pageId: liConnected ? (liSession.pageId || null) : null,
+        authorUrn: liConnected ? (liSession.authorUrn || null) : null,
+        pageName: liConnected ? (liSession.pageName || null) : null,
+        pageHandle: liConnected ? (liSession.pageHandle || null) : null,
+        followersCount: liConnected ? (liSession.followersCount || null) : null,
+        lastSyncedAt: liConnected ? (liSession.lastSyncedAt || 'Live via LinkedIn API v2') : null
       },
       google: {
         configured: googleConfigured,
-        mode: googleSession.connected && !googleSession.loggedOut ? 'live' : 'sandbox',
+        mode: googleConnected ? 'live' : 'sandbox',
         clientIdMasked: maskSecret(live.googleClientId),
         hasClientSecret: Boolean(live.googleClientSecret),
         apiKeyMasked: maskSecret(live.youtubeApiKey),
-        hasAccessToken: Boolean(live.googleAccessToken),
-        connected: Boolean(googleSession.connected && !googleSession.loggedOut),
-        channelId: googleSession.channelId || null,
-        channelName: googleSession.channelName || null,
-        channelHandle: googleSession.channelHandle || null,
-        subscribersCount: googleSession.subscribersCount || null,
-        adsCustomerId: googleSession.adsCustomerId || live.googleAdsCustomerId || null,
-        lastSyncedAt: googleSession.connected ? (googleSession.lastSyncedAt || 'Connected') : 'Not connected'
+        hasAccessToken: googleConnected,
+        connected: googleConnected,
+        channelId: googleConnected ? (googleSession.channelId || null) : null,
+        channelName: googleConnected ? (googleSession.channelName || null) : null,
+        channelHandle: googleConnected ? (googleSession.channelHandle || null) : null,
+        subscribersCount: googleConnected ? (googleSession.subscribersCount || null) : null,
+        adsCustomerId: googleConnected ? (googleSession.adsCustomerId || null) : null,
+        lastSyncedAt: googleConnected ? (googleSession.lastSyncedAt || 'Connected') : 'Not connected'
       },
       hubspot: {
         configured: hsConfigured,
-        mode: hsSession.connected && !hsSession.loggedOut ? 'live' : 'sandbox',
+        mode: hsConnected ? 'live' : 'sandbox',
         clientIdMasked: maskSecret(live.hubspotClientId),
         hasClientSecret: Boolean(live.hubspotClientSecret),
         tokenMasked: maskSecret(live.hubspotAccessToken),
-        connected: Boolean(hsSession.connected && !hsSession.loggedOut),
-        portalId: hsSession.portalId || null,
-        accountName: hsSession.accountName || null,
-        contactsCount: hsSession.contactsCount ?? null,
-        lastSyncedAt: hsSession.connected ? (hsSession.lastSyncedAt || 'Connected') : 'Not connected'
+        connected: hsConnected,
+        portalId: hsConnected ? (hsSession.portalId || null) : null,
+        accountName: hsConnected ? (hsSession.accountName || null) : null,
+        contactsCount: hsConnected ? (hsSession.contactsCount ?? null) : null,
+        lastSyncedAt: hsConnected ? (hsSession.lastSyncedAt || 'Connected') : 'Not connected'
       },
       smtp: {
         configured: smtpConfigured,
@@ -1591,7 +1700,7 @@ async function startServer() {
         secure: Boolean(smtpSession?.secure),
         user: smtpSession?.user || '',
         passMasked: maskSecret(smtpSession?.pass),
-        fromName: smtpSession?.fromName || db.brandProfile?.name || 'Serpely',
+        fromName: smtpSession?.fromName || activeDb.brandProfile?.name || 'Serpely',
         fromEmail: smtpSession?.fromEmail || smtpSession?.user || '',
         replyTo: smtpSession?.replyTo || smtpSession?.fromEmail || '',
         lastVerifiedAt: smtpSession?.lastVerifiedAt || null
@@ -1617,24 +1726,139 @@ async function startServer() {
         connected: Boolean(live.heygenApiKey),
         lastSyncedAt: live.heygenApiKey ? 'Live via HEYGEN_API_KEY' : null
       },
-      connectedPages: db.connectedPages || []
+      connectedPages: (activeDb.connectedPages || []).filter(p => {
+        if (!p.ownerEmail) return email === BELAL_EMAIL || email === DEFAULT_ADMIN_EMAIL;
+        return p.ownerEmail.toLowerCase() === email;
+      })
     };
   };
 
-  // Auto-sync Facebook & LinkedIn pages if Direct Tokens are present in .env
-  const autoSyncPageTokens = async () => {
+  // Helper to discover and scrape all LinkedIn Company Pages / Organizations / Showcase Pages for an access token
+  const scrapeLinkedInOrganizations = async (accessToken: string, targetEmail: string): Promise<any[]> => {
+    const scraped: any[] = [];
+    try {
+      // Query without &role=ADMINISTRATOR to retrieve all approved organizations where user has any admin role
+      const orgAclRes = await fetch(
+        'https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee&state=APPROVED&count=100',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'X-Restli-Protocol-Version': '2.0.0'
+          }
+        }
+      );
+
+      if (!orgAclRes.ok) {
+        const errTxt = await orgAclRes.text();
+        console.warn('LinkedIn ACL query notice:', orgAclRes.status, errTxt);
+        return scraped;
+      }
+
+      const orgAclData = (await orgAclRes.json()) as any;
+      const elements = Array.isArray(orgAclData?.elements) ? orgAclData.elements : [];
+
+      for (const elem of elements) {
+        const orgUrn = elem.organizationalTarget;
+        if (!orgUrn) continue;
+
+        const orgId = orgUrn.split(':').pop();
+        if (!orgId) continue;
+
+        // Skip dummy/mock targets
+        if (orgId === '1' || orgId === 'syn-1') continue;
+
+        const isBrand = orgUrn.includes('organizationBrand');
+        const detailUrl = isBrand
+          ? `https://api.linkedin.com/v2/organizationBrands/${orgId}`
+          : `https://api.linkedin.com/v2/organizations/${orgId}`;
+
+        let orgName = `Organization ${orgId}`;
+        let vanityName = '';
+
+        try {
+          const detailRes = await fetch(detailUrl, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'X-Restli-Protocol-Version': '2.0.0'
+            }
+          });
+          if (detailRes.ok) {
+            const detail = (await detailRes.json()) as any;
+            if (detail?.localizedName) {
+              orgName = detail.localizedName;
+            } else if (detail?.name?.localized) {
+              const locVals = Object.values(detail.name.localized);
+              if (locVals.length > 0) orgName = String(locVals[0]);
+            } else if (detail?.vanityName) {
+              orgName = detail.vanityName;
+            }
+            if (detail?.vanityName) {
+              vanityName = detail.vanityName;
+            }
+          }
+        } catch (dErr) {
+          console.warn(`Could not fetch details for ${orgUrn}:`, dErr);
+        }
+
+        // Fetch live follower count
+        let followers = 0;
+        try {
+          const netRes = await fetch(
+            `https://api.linkedin.com/v2/networkSizes/${encodeURIComponent(orgUrn)}?edgeType=CompanyFollowedByMember`,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'X-Restli-Protocol-Version': '2.0.0'
+              }
+            }
+          );
+          if (netRes.ok) {
+            const netData: any = await netRes.json();
+            if (typeof netData?.firstDegreeSize === 'number') {
+              followers = netData.firstDegreeSize;
+            }
+          }
+        } catch {}
+
+        scraped.push({
+          id: `page-li-org-${orgId}`,
+          platform: 'LinkedIn' as const,
+          pageName: `${orgName} (Company Page)`,
+          pageHandle: vanityName ? `linkedin.com/company/${vanityName}` : `linkedin.com/company/${orgId}`,
+          externalPageId: orgUrn,
+          followersCount: followers,
+          oauthConnected: true,
+          ownerEmail: targetEmail,
+          accountType: 'organization',
+          scopes: ['w_organization_social', 'r_organization_social'],
+          lastSyncedAt: 'Live via LinkedIn API',
+          accessToken: accessToken,
+          category: isBrand ? 'Showcase Page' : 'Company Page',
+          isSelected: false
+        });
+      }
+    } catch (err) {
+      console.error('scrapeLinkedInOrganizations error:', err);
+    }
+    return scraped;
+  };
+
+  // Auto-sync Facebook & LinkedIn pages for a specific user workspace
+  const autoSyncPageTokensForUser = async (userEmail: string, userDb: MarketingOsDb) => {
     try {
       const live = getLiveCredentials();
-      if (live.facebookPageAccessToken && !db.oauthSessions?.facebook?.loggedOut && (!db.oauthSessions?.facebook?.connected || db.connectedPages.filter(p => p.platform === 'Facebook').length === 0)) {
+      const normEmail = (userEmail || '').trim().toLowerCase();
+      const fbToken = userDb.oauthSessions?.facebook?.userAccessToken || userDb.oauthSessions?.facebook?.pageAccessToken;
+      if (fbToken && !userDb.oauthSessions?.facebook?.loggedOut && (!userDb.connectedPages.filter(p => p.platform === 'Facebook').length)) {
         const [meRes, pagesRes] = await Promise.all([
-          fetch(`https://graph.facebook.com/v19.0/me?fields=id,name,username,fan_count&access_token=${encodeURIComponent(live.facebookPageAccessToken)}`),
-          fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,fan_count,username,category,picture{url}&access_token=${encodeURIComponent(live.facebookPageAccessToken)}`)
+          fetch(`https://graph.facebook.com/v19.0/me?fields=id,name,username,fan_count&access_token=${encodeURIComponent(fbToken)}`),
+          fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,fan_count,username,category,picture{url}&access_token=${encodeURIComponent(fbToken)}`)
         ]);
         const meData = (await meRes.json()) as any;
         const pagesData = (await pagesRes.json()) as any;
         if (meData?.id && !meData.error) {
-          db.oauthSessions.facebook.connected = true;
-          db.oauthSessions.facebook.userName = meData.name;
+          userDb.oauthSessions.facebook.connected = true;
+          userDb.oauthSessions.facebook.userName = meData.name;
           const rawPages = Array.isArray(pagesData?.data) && pagesData.data.length > 0 ? pagesData.data : [meData];
           const scraped = rawPages.map((pg: any, idx: number) => ({
             id: `page-fb-${pg.id}`,
@@ -1645,284 +1869,96 @@ async function startServer() {
             followersCount: typeof pg.fan_count === 'number' ? pg.fan_count : 0,
             oauthConnected: true,
             scopes: ['pages_manage_posts', 'pages_read_engagement', 'pages_show_list'],
-            lastSyncedAt: 'Live via .env Page Token',
-            accessToken: pg.access_token || live.facebookPageAccessToken,
+            lastSyncedAt: 'Live via Meta Graph OAuth',
+            accessToken: pg.access_token || fbToken,
             category: pg.category || 'Business Page',
             pictureUrl: pg.picture?.data?.url,
+            ownerEmail: normEmail,
             isSelected: idx === 0
           }));
-          db.connectedPages = [
-            ...db.connectedPages.filter(p => p.platform !== 'Facebook'),
+          userDb.connectedPages = [
+            ...userDb.connectedPages.filter(p => p.platform !== 'Facebook'),
             ...scraped
           ];
           const active = scraped[0];
-          db.oauthSessions.facebook.pageId = active.externalPageId;
-          db.oauthSessions.facebook.pageName = active.pageName;
-          db.oauthSessions.facebook.pageHandle = active.pageHandle;
-          db.oauthSessions.facebook.followersCount = active.followersCount;
-          db.oauthSessions.facebook.pageAccessToken = active.accessToken;
-          db.oauthSessions.facebook.lastSyncedAt = 'Live via .env Page Token';
-          saveDb(db);
+          userDb.oauthSessions.facebook.pageId = active.externalPageId;
+          userDb.oauthSessions.facebook.pageName = active.pageName;
+          userDb.oauthSessions.facebook.pageHandle = active.pageHandle;
+          userDb.oauthSessions.facebook.followersCount = active.followersCount;
+          userDb.oauthSessions.facebook.pageAccessToken = active.accessToken;
+          userDb.oauthSessions.facebook.lastSyncedAt = 'Live via Meta Graph OAuth';
+          await saveUserWorkspace(normEmail, userDb);
         }
       }
 
-      // LinkedIn Auto-Sync (User Profile Picture, Company Page Scrape & Recent Posts)
-      const liToken = live.linkedinAccessToken || db.oauthSessions.linkedin?.userAccessToken || db.oauthSessions.linkedin?.pageAccessToken;
-      if (liToken && !db.oauthSessions?.linkedin?.loggedOut) {
+      // LinkedIn Auto-Sync (Preserve authentic names, refresh followers & purge dummy pages)
+      const liToken = userDb.oauthSessions.linkedin?.userAccessToken || userDb.oauthSessions.linkedin?.pageAccessToken;
+      if (liToken && !userDb.oauthSessions?.linkedin?.loggedOut) {
         try {
-          // 1. If personal profile scopes available, sync personal info
-          let sub: string | undefined;
-          let displayName = 'Md Belal Hossain';
-          let pictureUrl: string | undefined;
+          // 1. Purge any legacy dummy mock pages
+          userDb.connectedPages = (userDb.connectedPages || []).filter(p => {
+            if (p.platform !== 'LinkedIn') return true;
+            const isDummy = p.id === 'page-li-org-1' ||
+                            p.id === 'page-li-tech-sheba' ||
+                            p.id === 'page-li-corp-107099137' ||
+                            p.externalPageId === 'urn:li:organization:1' ||
+                            p.externalPageId === 'ext-li-syn-1';
+            return !isDummy;
+          });
 
-          try {
-            const userInfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
-              headers: { Authorization: `Bearer ${liToken}` }
-            });
-            if (userInfoRes.ok) {
-              const userInfo = (await userInfoRes.json()) as any;
-              if (userInfo && userInfo.sub) {
-                sub = userInfo.sub;
-                displayName =
-                  userInfo.name ||
-                  [userInfo.given_name, userInfo.family_name].filter(Boolean).join(' ') ||
-                  'Md Belal Hossain';
-                pictureUrl = userInfo.picture;
-              }
+          // 2. If no LinkedIn pages exist, run discovery to find all company pages
+          const currentLiPages = userDb.connectedPages.filter(p => p.platform === 'LinkedIn');
+          if (currentLiPages.length === 0) {
+            const discoveredPages = await scrapeLinkedInOrganizations(liToken, normEmail);
+            if (discoveredPages.length > 0) {
+              discoveredPages[0].isSelected = true;
+              userDb.connectedPages.push(...discoveredPages);
             }
-          } catch (uErr) {
-            console.warn('LinkedIn userinfo notice (likely organization token):', uErr);
           }
 
-          // 2. Organization / Company Page Auto-Scraping (Tech Sheba)
-          const rawAuthor = (live.linkedinAuthorUrn || db.oauthSessions.linkedin?.authorUrn || '').trim();
-          const orgIdMatch = rawAuthor.match(/(?:urn:li:organization:)?(\d+)/);
-
-          if (orgIdMatch) {
-            const orgId = orgIdMatch[1];
-            const orgUrn = `urn:li:organization:${orgId}`;
-            console.log(`📡 Auto-syncing LinkedIn Organization Page: ${orgUrn}`);
-
-            // Fetch live follower count via networkSizes API
-            let realFollowersCount = 55;
-            try {
-              const netRes = await fetch(
-                `https://api.linkedin.com/v2/networkSizes/${encodeURIComponent(orgUrn)}?edgeType=CompanyFollowedByMember`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${liToken}`,
-                    'X-Restli-Protocol-Version': '2.0.0'
-                  }
-                }
-              );
-              if (netRes.ok) {
-                const netData: any = await netRes.json();
-                if (typeof netData?.firstDegreeSize === 'number') {
-                  realFollowersCount = netData.firstDegreeSize;
-                  console.log(`✅ Live Tech Sheba Followers Scraped: ${realFollowersCount}`);
-                }
-              }
-            } catch (netErr) {
-              console.warn('LinkedIn networkSizes fetch notice:', netErr);
-            }
-
-            // Fetch live published posts via LinkedIn REST API
-            let liveOrgPosts: any[] = [];
-            const mediaUrlMap = new Map<string, string>();
-            try {
-              const postsRes = await fetch(
-                `https://api.linkedin.com/rest/posts?author=${encodeURIComponent(orgUrn)}&q=author&count=25`,
-                {
-                  headers: {
-                    Authorization: `Bearer ${liToken}`,
-                    'Linkedin-Version': '202601',
-                    'X-Restli-Protocol-Version': '2.0.0'
-                  }
-                }
-              );
-              if (postsRes.ok) {
-                const postsData: any = await postsRes.json();
-                liveOrgPosts = postsData?.elements || [];
-                console.log(`✅ Live Tech Sheba Published Posts Scraped: ${liveOrgPosts.length} posts`);
-
-                // Collect media IDs to resolve real download URLs from LinkedIn CDN
-                const mediaIds = liveOrgPosts
-                  .map(p => p.content?.media?.id)
-                  .filter((id): id is string => Boolean(id && typeof id === 'string'));
-
-                if (mediaIds.length > 0) {
-                  await Promise.all(
-                    mediaIds.map(async mId => {
-                      try {
-                        const imgRes = await fetch(
-                          `https://api.linkedin.com/rest/images/${encodeURIComponent(mId)}`,
-                          {
-                            headers: {
-                              Authorization: `Bearer ${liToken}`,
-                              'Linkedin-Version': '202601',
-                              'X-Restli-Protocol-Version': '2.0.0'
-                            }
-                          }
-                        );
-                        if (imgRes.ok) {
-                          const imgData: any = await imgRes.json();
-                          if (imgData?.downloadUrl) {
-                            mediaUrlMap.set(mId, imgData.downloadUrl);
-                          }
-                        }
-                      } catch (err) {
-                        console.warn(`Could not resolve media ${mId}:`, err);
-                      }
-                    })
-                  );
-                  console.log(`✅ Resolved ${mediaUrlMap.size} live image URLs from LinkedIn CDN`);
-                }
-              }
-            } catch (pErr) {
-              console.warn('LinkedIn live org posts fetch notice:', pErr);
-            }
-
-            // Update existing posts in db.pagePosts with resolved LinkedIn media URLs
-            for (const post of db.pagePosts || []) {
-              const matchedLp = liveOrgPosts.find(lp => lp.id === (post as any).liveLinkedInPostId);
-              const mId = matchedLp?.content?.media?.id;
-              if (mId && mediaUrlMap.has(mId)) {
-                post.visualUrl = mediaUrlMap.get(mId)!;
-              }
-            }
-
-            // Update LinkedIn session for Company Page
-            db.oauthSessions.linkedin.connected = true;
-            db.oauthSessions.linkedin.userName = 'Tech Sheba';
-            db.oauthSessions.linkedin.pageName = 'Tech Sheba (Company Page)';
-            db.oauthSessions.linkedin.pageId = orgUrn;
-            db.oauthSessions.linkedin.authorUrn = orgUrn;
-            db.oauthSessions.linkedin.pageHandle = `linkedin.com/company/${orgId}`;
-            db.oauthSessions.linkedin.followersCount = realFollowersCount;
-            db.oauthSessions.linkedin.lastSyncedAt = 'Live via LinkedIn Community Management API';
-            db.oauthSessions.linkedin.pageAccessToken = liToken;
-            db.oauthSessions.linkedin.userAccessToken = liToken;
-
-            // Update or insert Tech Sheba in connectedPages
-            let orgPage = db.connectedPages.find(
-              p => p.id === `page-li-org-${orgId}` || p.externalPageId === orgUrn || p.externalPageId === orgId
-            );
-            if (orgPage) {
-              orgPage.pageName = 'Tech Sheba (Company Page)';
-              orgPage.pageHandle = `linkedin.com/company/${orgId}`;
-              orgPage.externalPageId = orgUrn;
-              orgPage.followersCount = realFollowersCount;
-              orgPage.oauthConnected = true;
-              orgPage.scopes = ['w_organization_social', 'r_organization_social'];
-              orgPage.lastSyncedAt = 'Live via LinkedIn Community Management API';
-              orgPage.accessToken = liToken;
-              orgPage.category = 'Company Page';
-              orgPage.isSelected = true;
-            } else {
-              orgPage = {
-                id: `page-li-org-${orgId}`,
-                platform: 'LinkedIn',
-                pageName: 'Tech Sheba (Company Page)',
-                pageHandle: `linkedin.com/company/${orgId}`,
-                externalPageId: orgUrn,
-                followersCount: realFollowersCount,
-                oauthConnected: true,
-                scopes: ['w_organization_social', 'r_organization_social'],
-                lastSyncedAt: 'Live via LinkedIn Community Management API',
-                accessToken: liToken,
-                category: 'Company Page',
-                isSelected: true
-              };
-              db.connectedPages.unshift(orgPage);
-            }
-
-            // Sync scraped live posts into db.pagePosts
-            if (liveOrgPosts.length > 0) {
-              const existingUrns = new Set(
-                (db.pagePosts || []).map(p => (p as any).liveLinkedInPostId || p.id)
-              );
-              for (const lp of liveOrgPosts) {
-                const liveId = lp.id;
-                if (!liveId || existingUrns.has(liveId)) continue;
-                existingUrns.add(liveId);
-
-                const cleanCommentary = String(lp.commentary || '')
-                  .replace(/\{hashtag\|\\#\|([^}]+)\}/g, '#$1')
-                  .trim();
-                const firstLine = cleanCommentary.split('\n')[0].replace(/[#*]/g, '').trim();
-                const postTitle = firstLine.slice(0, 75) || 'Tech Sheba LinkedIn Update';
-                const mId = lp.content?.media?.id;
-                const realImageUrl = (mId && mediaUrlMap.get(mId)) || '';
-
-                db.pagePosts.unshift({
-                  id: `psp-li-${Date.now()}-${db.pagePosts.length}`,
-                  platform: 'LinkedIn',
-                  pageId: orgPage.id,
-                  pageName: 'Tech Sheba (Company Page)',
-                  pageHandle: `linkedin.com/company/${orgId}`,
-                  keyword: 'IT Support & Infrastructure',
-                  researchBrief: {
-                    keyword: 'Tech Sheba Services',
-                    searchVolume: 'Live Organization Broadcast',
-                    difficultyScore: 0,
-                    buyerIntent: 'Commercial',
-                    competitorGap: 'Live Company Page Dispatch',
-                    audiencePainPoint: 'IT Infrastructure & Downtime Prevention',
-                    keyBenchmarkStat: 'Real Live LinkedIn Post',
-                    recommendedAngles: {
-                      linkedinAngle: 'Executive B2B IT updates',
-                      facebookAngle: 'Local business IT solutions'
+          // 3. Refresh live follower counts for all real LinkedIn company pages (preserving authentic pageName!)
+          for (const page of userDb.connectedPages) {
+            if (page.platform === 'LinkedIn' && page.externalPageId && page.externalPageId.startsWith('urn:li:organization')) {
+              try {
+                const netRes = await fetch(
+                  `https://api.linkedin.com/v2/networkSizes/${encodeURIComponent(page.externalPageId)}?edgeType=CompanyFollowedByMember`,
+                  {
+                    headers: {
+                      Authorization: `Bearer ${liToken}`,
+                      'X-Restli-Protocol-Version': '2.0.0'
                     }
-                  },
-                  content: cleanCommentary,
-                  hashtags: (cleanCommentary.match(/#\w+/g) || []).map(t => t.slice(1)),
-                  visualConfig: {
-                    headline: postTitle,
-                    subheadline: 'Tech Sheba Official Post',
-                    metricValue: 'Live',
-                    metricLabel: 'Company Page',
-                    keywordTag: 'LIVE UPDATE',
-                    theme: 'emerald-matrix',
-                    footerBrand: 'Tech Sheba',
-                    layout: 'split-hero'
-                  },
-                  visualUrl: realImageUrl,
-                  status: 'published',
-                  createdAt: lp.createdAt ? new Date(lp.createdAt).toLocaleString() : 'Recently',
-                  publishedAt: lp.publishedAt ? new Date(lp.publishedAt).toLocaleString() : 'Recently',
-                  externalPostUrl: `https://www.linkedin.com/feed/update/${liveId}/`,
-                  analytics: {
-                    impressions: realFollowersCount,
-                    reach: realFollowersCount,
-                    clicks: 0,
-                    ctr: 0.0,
-                    reactions: 0,
-                    commentsCount: 0,
-                    shares: 0,
-                    engagementRate: 0.0
-                  },
-                  isLivePublished: true,
-                  liveLinkedInPostId: liveId
-                } as any);
-              }
+                  }
+                );
+                if (netRes.ok) {
+                  const netData: any = await netRes.json();
+                  if (typeof netData?.firstDegreeSize === 'number') {
+                    page.followersCount = netData.firstDegreeSize;
+                  }
+                }
+              } catch {}
+              page.oauthConnected = true;
+              page.accessToken = liToken;
+              page.lastSyncedAt = 'Live via LinkedIn API';
             }
           }
 
-          // 3. If sub was resolved from userinfo, also keep personal profile page updated
-          if (sub) {
-            let personPage = db.connectedPages.find(p => p.id.includes('person') || p.category === 'Personal Profile');
-            const validHandle = 'linkedin.com/in/';
-            if (personPage) {
-              personPage.pageName = `${displayName} (Personal Profile)`;
-              personPage.pageHandle = validHandle;
-              personPage.externalPageId = `urn:li:person:${sub}`;
-              personPage.oauthConnected = true;
-              if (pictureUrl) personPage.pictureUrl = pictureUrl;
-              personPage.category = 'Personal Profile';
-            }
+          // 4. Update the active session to match the selected page
+          const selectedPage = userDb.connectedPages.find(p => p.platform === 'LinkedIn' && p.isSelected) ||
+                               userDb.connectedPages.find(p => p.platform === 'LinkedIn');
+
+          if (selectedPage) {
+            userDb.oauthSessions.linkedin.connected = true;
+            userDb.oauthSessions.linkedin.pageId = selectedPage.externalPageId;
+            userDb.oauthSessions.linkedin.authorUrn = selectedPage.externalPageId;
+            userDb.oauthSessions.linkedin.pageName = selectedPage.pageName;
+            userDb.oauthSessions.linkedin.pageHandle = selectedPage.pageHandle;
+            userDb.oauthSessions.linkedin.followersCount = selectedPage.followersCount;
+            userDb.oauthSessions.linkedin.lastSyncedAt = 'Live via LinkedIn API';
+            userDb.oauthSessions.linkedin.pageAccessToken = liToken;
+            userDb.oauthSessions.linkedin.userAccessToken = liToken;
           }
 
-          saveDb(db);
+          await saveUserWorkspace(normEmail, userDb);
         } catch (err) {
           console.warn('Auto-sync LinkedIn token error:', err);
         }
@@ -1932,17 +1968,77 @@ async function startServer() {
     }
   };
 
+  const autoSyncPageTokens = async () => {
+    await autoSyncPageTokensForUser(BELAL_EMAIL, getUserWorkspace(BELAL_EMAIL));
+  };
+
   // ============================================================================
   // 1. OAuth 2.0 URL Generators, Live Credential Vault & Verification Endpoints
   // ============================================================================
   app.get('/api/auth/status', async (req, res) => {
-    await autoSyncPageTokens();
-    res.json(buildLiveStatusPayload(req));
+    const email = resolveUserEmail(req);
+    const userDb = getUserWorkspace(email);
+    if (userDb.oauthSessions?.linkedin?.userAccessToken || userDb.oauthSessions?.linkedin?.pageAccessToken) {
+      await autoSyncPageTokensForUser(email, userDb);
+    }
+    res.json(buildLiveStatusPayload(req, userDb, email));
   });
 
   app.get('/api/integrations/live-status', async (req, res) => {
-    await autoSyncPageTokens();
-    res.json(buildLiveStatusPayload(req));
+    const email = resolveUserEmail(req);
+    const userDb = getUserWorkspace(email);
+    if (userDb.oauthSessions?.linkedin?.userAccessToken || userDb.oauthSessions?.linkedin?.pageAccessToken) {
+      await autoSyncPageTokensForUser(email, userDb);
+    }
+    res.json(buildLiveStatusPayload(req, userDb, email));
+  });
+
+  // User Registration Endpoint
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const { name, email, password, role = 'owner', title = 'Workspace Owner', initials } = req.body || {};
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      if (!cleanEmail) {
+        return res.status(400).json({ success: false, error: 'Email is required' });
+      }
+
+      const userRecord = {
+        id: `usr-${Date.now()}`,
+        name: String(name || cleanEmail.split('@')[0]),
+        email: cleanEmail,
+        password: String(password || ''),
+        role,
+        title,
+        initials: initials || cleanEmail.substring(0, 2).toUpperCase(),
+        isCustom: true,
+        permissions: {
+          canManageSettings: true,
+          canManageApiKeys: true,
+          canApproveSpends: true,
+          canCreateAssets: true,
+          canPublishLive: true,
+          isReadOnly: false
+        }
+      };
+
+      await writeUserToSql(userRecord);
+      const cleanDb = createInitialDb();
+      await saveUserWorkspace(cleanEmail, cleanDb);
+
+      res.json({ success: true, user: userRecord });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || 'Failed to register' });
+    }
+  });
+
+  // Get Registered Users
+  app.get('/api/auth/users', async (_req, res) => {
+    try {
+      const users = await readAllUsersFromSql();
+      res.json({ success: true, users });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message });
+    }
   });
 
   // Helper to sync creds to .env file automatically
@@ -2724,57 +2820,51 @@ async function startServer() {
   });
 
   // Disconnect or clear a provider's live session
-  app.post('/api/integrations/disconnect', (req, res) => {
+  app.post('/api/integrations/disconnect', async (req, res) => {
     ensureOAuthSessions();
+    const email = resolveUserEmail(req);
+    const userDb = getUserWorkspace(email);
     const { provider } = req.body || {};
     const prov = String(provider || '').toLowerCase();
 
     if (prov === 'gemini') {
-      db.integrations = db.integrations.map(int =>
+      userDb.integrations = userDb.integrations.map(int =>
         int.name.toLowerCase().includes('gemini')
           ? { ...int, status: 'disconnected', lastSync: 'Disconnected' }
           : int
       );
     } else if (prov === 'facebook' || prov === 'meta') {
-      db.oauthSessions.facebook.connected = false;
-      (db.oauthSessions.facebook as any).loggedOut = true;
-      db.oauthSessions.facebook.pageAccessToken = undefined;
-      db.oauthSessions.facebook.userAccessToken = undefined;
-      db.oauthSessions.credentials.facebookPageAccessToken = undefined;
-      db.connectedPages = db.connectedPages.map(p =>
-        p.platform === 'Facebook' ? { ...p, oauthConnected: false, lastSyncedAt: 'Disconnected' } : p
-      );
+      userDb.oauthSessions.facebook.connected = false;
+      (userDb.oauthSessions.facebook as any).loggedOut = true;
+      userDb.oauthSessions.facebook.pageAccessToken = undefined;
+      userDb.oauthSessions.facebook.userAccessToken = undefined;
+      userDb.oauthSessions.credentials.facebookPageAccessToken = undefined;
+      userDb.connectedPages = userDb.connectedPages.filter(p => p.platform !== 'Facebook');
     } else if (prov === 'linkedin') {
-      db.oauthSessions.linkedin.connected = false;
-      (db.oauthSessions.linkedin as any).loggedOut = true;
-      db.oauthSessions.linkedin.pageAccessToken = undefined;
-      db.oauthSessions.linkedin.userAccessToken = undefined;
-      db.oauthSessions.credentials.linkedinAccessToken = undefined;
-      db.connectedPages = db.connectedPages.map(p =>
-        p.platform === 'LinkedIn' ? { ...p, oauthConnected: false, lastSyncedAt: 'Disconnected' } : p
-      );
+      userDb.oauthSessions.linkedin.connected = false;
+      (userDb.oauthSessions.linkedin as any).loggedOut = true;
+      userDb.oauthSessions.linkedin.pageAccessToken = undefined;
+      userDb.oauthSessions.linkedin.userAccessToken = undefined;
+      userDb.oauthSessions.credentials.linkedinAccessToken = undefined;
+      userDb.connectedPages = userDb.connectedPages.filter(p => p.platform !== 'LinkedIn');
     } else if (prov === 'google' || prov === 'youtube') {
-      db.oauthSessions.google.connected = false;
-      (db.oauthSessions.google as any).loggedOut = true;
-      db.oauthSessions.google.accessToken = undefined;
-      db.oauthSessions.credentials.googleAccessToken = undefined;
-      db.connectedPages = db.connectedPages.map(p =>
-        p.platform === 'YouTube' ? { ...p, oauthConnected: false, lastSyncedAt: 'Disconnected' } : p
-      );
+      userDb.oauthSessions.google.connected = false;
+      (userDb.oauthSessions.google as any).loggedOut = true;
+      userDb.oauthSessions.google.accessToken = undefined;
+      userDb.oauthSessions.credentials.googleAccessToken = undefined;
+      userDb.connectedPages = userDb.connectedPages.filter(p => p.platform !== 'YouTube');
     } else if (prov === 'hubspot') {
-      db.oauthSessions.hubspot.connected = false;
-      (db.oauthSessions.hubspot as any).loggedOut = true;
-      db.oauthSessions.hubspot.accessToken = undefined;
-      db.oauthSessions.credentials.hubspotAccessToken = undefined;
+      userDb.oauthSessions.hubspot.connected = false;
+      (userDb.oauthSessions.hubspot as any).loggedOut = true;
+      userDb.oauthSessions.hubspot.accessToken = undefined;
+      userDb.oauthSessions.credentials.hubspotAccessToken = undefined;
     } else {
       // Handles Threads, Bluesky, TikTok, Pinterest, X, Instagram, etc.
-      db.connectedPages = db.connectedPages.map(p =>
-        p.platform.toLowerCase() === prov || p.platform.toLowerCase().includes(prov)
-          ? { ...p, oauthConnected: false, lastSyncedAt: 'Disconnected' }
-          : p
+      userDb.connectedPages = userDb.connectedPages.filter(p =>
+        !p.platform.toLowerCase().includes(prov)
       );
-      if (Array.isArray(db.integrations)) {
-        db.integrations = db.integrations.map(int =>
+      if (Array.isArray(userDb.integrations)) {
+        userDb.integrations = userDb.integrations.map(int =>
           int.name.toLowerCase().includes(prov)
             ? { ...int, status: 'disconnected', lastSync: 'Disconnected' }
             : int
@@ -2782,11 +2872,11 @@ async function startServer() {
       }
     }
 
-    saveDb(db);
+    await saveUserWorkspace(email, userDb);
     res.json({
       success: true,
-      liveStatus: buildLiveStatusPayload(req),
-      state: db
+      liveStatus: buildLiveStatusPayload(req, userDb, email),
+      state: userDb
     });
   });
 
@@ -3794,10 +3884,12 @@ async function startServer() {
     let exchangeErrorMessage: string | null = null;
     let pagePayload: Record<string, unknown> = { provider };
     const live = getLiveCredentials();
-    const linkedinSession = db.oauthSessions.linkedin;
-    const facebookSession = db.oauthSessions.facebook;
-    const googleSession = db.oauthSessions.google;
-    const hubspotSession = db.oauthSessions.hubspot;
+    const targetEmail = (userEmail || BELAL_EMAIL).toLowerCase();
+    const targetDb = getUserWorkspace(targetEmail);
+    const linkedinSession = targetDb.oauthSessions.linkedin;
+    const facebookSession = targetDb.oauthSessions.facebook;
+    const googleSession = targetDb.oauthSessions.google;
+    const hubspotSession = targetDb.oauthSessions.hubspot;
 
     const isPersonalApp = Boolean(decoded?.isPersonalApp || mode === 'personal');
     const liClientId = (isPersonalApp && live.linkedinPersonalClientId) ? live.linkedinPersonalClientId : live.linkedinClientId;
@@ -3833,23 +3925,20 @@ async function startServer() {
 
         if (tokenData.access_token) {
           authSuccess = true;
-          console.log('Successfully exchanged code for LinkedIn Access Token with scopes:', tokenData.scope);
+          console.log(`[LinkedIn OAuth] Successfully exchanged code for LinkedIn Access Token for ${targetEmail} with scopes:`, tokenData.scope);
           linkedinSession.userAccessToken = tokenData.access_token;
           linkedinSession.pageAccessToken = tokenData.access_token;
-          db.oauthSessions.credentials.linkedinAccessToken = tokenData.access_token;
           linkedinSession.connected = true;
+          linkedinSession.loggedOut = false;
           linkedinSession.lastSyncedAt = 'Live via LinkedIn API v2';
 
-          updateEnvFile({
-            LINKEDIN_ACCESS_TOKEN: tokenData.access_token
-          });
-
-          // Update existing company or personal pages with the new access token
-          for (const page of db.connectedPages) {
+          // Update existing company or personal pages for this user with the new access token
+          for (const page of targetDb.connectedPages) {
             if (page.platform === 'LinkedIn') {
               page.accessToken = tokenData.access_token;
               page.oauthConnected = true;
               page.lastSyncedAt = 'Live via LinkedIn OAuth 2.0';
+              if (!page.ownerEmail) page.ownerEmail = targetEmail;
             }
           }
 
@@ -3882,135 +3971,87 @@ async function startServer() {
 
           const scrapedLiPages: any[] = [];
 
-          // Only scrape Organization Pages if using Company App with Community Management API permissions
+          // 1. Scrape Organization Pages if using Company App with Community Management API permissions
           if (!isPersonalApp) {
-            try {
-              const orgAclRes = await fetch(
-                'https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED',
-                {
-                  headers: {
-                    Authorization: `Bearer ${tokenData.access_token}`,
-                    'X-Restli-Protocol-Version': '2.0.0'
-                  }
-                }
-              );
-              if (orgAclRes.ok) {
-                const orgAclData = (await orgAclRes.json()) as any;
-                const elements = Array.isArray(orgAclData?.elements) ? orgAclData.elements : [];
-                for (const elem of elements) {
-                  const orgUrn = elem.organizationalTarget;
-                  if (orgUrn) {
-                    const orgId = orgUrn.split(':').pop();
-                    let orgName = `Organization ${orgId}`;
-                    try {
-                      const orgDetailRes = await fetch(
-                        `https://api.linkedin.com/v2/organizations/${orgId}`,
-                        {
-                          headers: {
-                            Authorization: `Bearer ${tokenData.access_token}`,
-                            'X-Restli-Protocol-Version': '2.0.0'
-                          }
-                        }
-                      );
-                      if (orgDetailRes.ok) {
-                        const orgDetail = (await orgDetailRes.json()) as any;
-                        if (orgDetail?.localizedName) orgName = orgDetail.localizedName;
-                      }
-                    } catch (e) {
-                      // Ignore individual org error
-                    }
-
-                    scrapedLiPages.push({
-                      id: `page-li-org-${orgId}`,
-                      platform: 'LinkedIn' as const,
-                      pageName: `${orgName} (Company Page)`,
-                      pageHandle: `linkedin.com/company/${orgId}`,
-                      externalPageId: orgUrn,
-                      followersCount: 1540,
-                      oauthConnected: true,
-                      ownerEmail: userEmail || undefined,
-                      accountType: 'organization',
-                      scopes: ['w_organization_social', 'r_organization_social'],
-                      lastSyncedAt: 'Live via LinkedIn OAuth 2.0',
-                      accessToken: tokenData.access_token,
-                      category: 'Company Page',
-                      isSelected: false
-                    });
-                  }
-                }
-              }
-            } catch (orgErr) {
-              console.error('LinkedIn org discovery error:', orgErr);
-            }
+            const orgPages = await scrapeLinkedInOrganizations(tokenData.access_token, targetEmail);
+            scrapedLiPages.push(...orgPages);
           }
 
-          // Add Personal Member Profile
-          const existingLiHandle = db.oauthSessions.linkedin?.pageHandle;
-          const liHandleToUse = (existingLiHandle && !existingLiHandle.includes(sub) && existingLiHandle !== `linkedin.com/in/${sub}`)
-            ? existingLiHandle
-            : `linkedin.com/in/${userInfo?.vanity_name || sub}`;
+          // 2. Add Personal Member Profile only if Personal App or user explicitly connected personal profile
+          if (isPersonalApp && sub) {
+            const existingLiHandle = targetDb.oauthSessions.linkedin?.pageHandle;
+            const liHandleToUse = (existingLiHandle && !existingLiHandle.includes(sub) && existingLiHandle !== `linkedin.com/in/${sub}`)
+              ? existingLiHandle
+              : `linkedin.com/in/${userInfo?.vanity_name || sub}`;
 
-          scrapedLiPages.unshift({
-            id: `page-li-person-${sub}`,
-            platform: 'LinkedIn' as const,
-            pageName: `${displayName} (Personal Profile)`,
-            pageHandle: liHandleToUse,
-            externalPageId: `urn:li:person:${sub}`,
-            followersCount: 500,
-            oauthConnected: true,
-            ownerEmail: userEmail || undefined,
-            accountType: 'personal',
-            scopes: ['openid', 'profile', 'email', 'w_member_social'],
-            lastSyncedAt: 'Live via LinkedIn OAuth 2.0',
-            accessToken: tokenData.access_token,
-            category: 'Personal Profile',
-            pictureUrl: userInfo?.picture,
-            isSelected: true
-          });
+            scrapedLiPages.unshift({
+              id: `page-li-person-${sub}`,
+              platform: 'LinkedIn' as const,
+              pageName: `${displayName} (Personal Profile)`,
+              pageHandle: liHandleToUse,
+              externalPageId: `urn:li:person:${sub}`,
+              followersCount: 500,
+              oauthConnected: true,
+              ownerEmail: targetEmail,
+              accountType: 'personal',
+              scopes: ['openid', 'profile', 'email', 'w_member_social'],
+              lastSyncedAt: 'Live via LinkedIn OAuth 2.0',
+              accessToken: tokenData.access_token,
+              category: 'Personal Profile',
+              pictureUrl: userInfo?.picture,
+              isSelected: true
+            });
+          }
 
-          // Mark first page as selected
-          scrapedLiPages[0].isSelected = true;
-          const activeLi = scrapedLiPages[0];
+          // 3. Mark first page as selected
+          let activeLi: any = null;
+          if (scrapedLiPages.length > 0) {
+            scrapedLiPages.forEach((p, idx) => {
+              p.isSelected = idx === 0;
+            });
+            activeLi = scrapedLiPages[0];
 
-          linkedinSession.pageId = activeLi.externalPageId;
-          linkedinSession.authorUrn = activeLi.externalPageId;
-          db.oauthSessions.credentials.linkedinAuthorUrn = activeLi.externalPageId;
-          linkedinSession.pageName = activeLi.pageName;
-          linkedinSession.pageHandle = activeLi.pageHandle;
-          linkedinSession.followersCount = activeLi.followersCount;
+            linkedinSession.pageId = activeLi.externalPageId;
+            linkedinSession.authorUrn = activeLi.externalPageId;
+            targetDb.oauthSessions.credentials.linkedinAuthorUrn = activeLi.externalPageId;
+            linkedinSession.pageName = activeLi.pageName;
+            linkedinSession.pageHandle = activeLi.pageHandle;
+            linkedinSession.followersCount = activeLi.followersCount;
+          }
 
-          // Merge with existing connectedPages, preserving other users' personal accounts
-          const otherPages = (db.connectedPages || []).filter((p) => {
+          // 4. Merge with existing connectedPages for this user, filtering out legacy mock pages
+          const otherPages = (targetDb.connectedPages || []).filter((p) => {
             if (p.platform !== 'LinkedIn') return true;
-            // Preserve other users' personal accounts
-            if (p.accountType === 'personal' && p.ownerEmail && userEmail && p.ownerEmail.toLowerCase() !== userEmail.toLowerCase()) {
-              return true;
-            }
-            // If it's a page not in the current scraped list, keep it
+            const isDummy = p.id === 'page-li-org-1' ||
+                            p.id === 'page-li-tech-sheba' ||
+                            p.id === 'page-li-corp-107099137' ||
+                            p.externalPageId === 'urn:li:organization:1' ||
+                            p.externalPageId === 'ext-li-syn-1';
+            if (isDummy) return false;
             return !scrapedLiPages.some(sp => sp.externalPageId === p.externalPageId);
           });
 
-          db.connectedPages = [
+          targetDb.connectedPages = [
             ...otherPages,
             ...scrapedLiPages
           ];
 
-          db.integrations = db.integrations.map((int) =>
+          targetDb.integrations = targetDb.integrations.map((int) =>
             int.name.toLowerCase().includes('linkedin')
               ? { ...int, status: 'connected', lastSync: 'Live OAuth 2.0' }
               : int
           );
-          saveDb(db);
+          await saveUserWorkspace(targetEmail, targetDb);
 
           pagePayload = {
             provider: 'LinkedIn',
-            pageId: activeLi.externalPageId,
-            pageName: activeLi.pageName,
-            pageHandle: activeLi.pageHandle,
-            followersCount: activeLi.followersCount,
-            lastSyncedAt: activeLi.lastSyncedAt,
+            pageId: activeLi?.externalPageId || '',
+            pageName: activeLi?.pageName || 'LinkedIn Account',
+            pageHandle: activeLi?.pageHandle || '',
+            followersCount: activeLi?.followersCount || 0,
+            lastSyncedAt: activeLi?.lastSyncedAt || 'Live via LinkedIn OAuth 2.0',
             scrapedCount: scrapedLiPages.length,
-            connectedPages: db.connectedPages
+            connectedPages: targetDb.connectedPages
           };
         } else {
           exchangeErrorMessage = tokenData.error_description || tokenData.error || 'LinkedIn access token exchange failed';
@@ -4110,20 +4151,23 @@ async function startServer() {
           facebookSession.accessToken = activeFb.accessToken;
           facebookSession.followersCount = activeFb.followersCount;
           facebookSession.pageHandle = activeFb.pageHandle;
-          db.oauthSessions.credentials.facebookPageAccessToken = activeFb.accessToken;
-          db.oauthSessions.credentials.facebookPageId = activeFb.externalPageId;
+          targetDb.oauthSessions.credentials.facebookPageAccessToken = activeFb.accessToken;
+          targetDb.oauthSessions.credentials.facebookPageId = activeFb.externalPageId;
 
-          db.connectedPages = [
-            ...db.connectedPages.filter((p) => p.platform !== 'Facebook'),
+          // Tag scraped Facebook pages with ownerEmail
+          scrapedFbPages.forEach(p => { p.ownerEmail = targetEmail; });
+
+          targetDb.connectedPages = [
+            ...targetDb.connectedPages.filter((p) => p.platform !== 'Facebook'),
             ...scrapedFbPages
           ];
 
-          db.integrations = db.integrations.map((int) =>
+          targetDb.integrations = targetDb.integrations.map((int) =>
             int.name.toLowerCase().includes('meta') || int.name.toLowerCase().includes('facebook')
               ? { ...int, status: 'connected', lastSync: 'Live OAuth 2.0' }
               : int
           );
-          saveDb(db);
+          await saveUserWorkspace(targetEmail, targetDb);
 
           pagePayload = {
             provider: 'Facebook',
@@ -4133,7 +4177,7 @@ async function startServer() {
             followersCount: activeFb.followersCount,
             lastSyncedAt: activeFb.lastSyncedAt,
             scrapedCount: scrapedFbPages.length,
-            connectedPages: db.connectedPages
+            connectedPages: targetDb.connectedPages
           };
         } else {
           exchangeErrorMessage = tokenData.error?.message || 'Meta token exchange failed';
@@ -4169,7 +4213,7 @@ async function startServer() {
           authSuccess = true;
           googleSession.accessToken = tokenData.access_token;
           if (tokenData.refresh_token) googleSession.refreshToken = tokenData.refresh_token;
-          db.oauthSessions.credentials.googleAccessToken = tokenData.access_token;
+          targetDb.oauthSessions.credentials.googleAccessToken = tokenData.access_token;
           googleSession.connected = true;
           googleSession.lastSyncedAt = 'Live via Google OAuth 2.0';
 
@@ -4188,14 +4232,14 @@ async function startServer() {
             googleSession.channelName = 'Google Ads & YouTube Connected';
           }
 
-          db.integrations = db.integrations.map(int => {
+          targetDb.integrations = targetDb.integrations.map(int => {
             const n = int.name.toLowerCase();
             if (n.includes('youtube') || n.includes('google')) {
               return { ...int, status: 'connected', lastSync: 'Live Google OAuth 2.0' };
             }
             return int;
           });
-          saveDb(db);
+          await saveUserWorkspace(targetEmail, targetDb);
 
           pagePayload = {
             provider: 'Google',
@@ -4234,17 +4278,17 @@ async function startServer() {
           authSuccess = true;
           hubspotSession.accessToken = tokenData.access_token;
           if (tokenData.refresh_token) hubspotSession.refreshToken = tokenData.refresh_token;
-          db.oauthSessions.credentials.hubspotAccessToken = tokenData.access_token;
+          targetDb.oauthSessions.credentials.hubspotAccessToken = tokenData.access_token;
           hubspotSession.connected = true;
           hubspotSession.accountName = 'HubSpot CRM Live OAuth';
           hubspotSession.lastSyncedAt = 'Live via HubSpot OAuth 2.0';
 
-          db.integrations = db.integrations.map(int =>
+          targetDb.integrations = targetDb.integrations.map(int =>
             int.name.toLowerCase().includes('hubspot')
               ? { ...int, status: 'connected', lastSync: 'Live HubSpot OAuth 2.0' }
               : int
           );
-          saveDb(db);
+          await saveUserWorkspace(targetEmail, targetDb);
 
           pagePayload = {
             provider: 'HubSpot',
@@ -4943,13 +4987,15 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  app.post('/api/social/pages/select', (req, res) => {
+  app.post('/api/social/pages/select', async (req, res) => {
+    const email = resolveUserEmail(req);
+    const userDb = getUserWorkspace(email);
     const { pageId } = req.body || {};
     if (!pageId) {
       return res.status(400).json({ error: 'Missing pageId parameter' });
     }
 
-    const target = (db.connectedPages || []).find(
+    const target = (userDb.connectedPages || []).find(
       (p) => p.id === pageId || p.externalPageId === pageId
     );
     if (!target) {
@@ -4957,7 +5003,7 @@ Return ONLY valid JSON matching this exact structure:
     }
 
     // Set isSelected for all pages of this platform
-    db.connectedPages = (db.connectedPages || []).map((p) => {
+    userDb.connectedPages = (userDb.connectedPages || []).map((p) => {
       if (p.platform === target.platform) {
         return { ...p, isSelected: p.id === target.id };
       }
@@ -4965,39 +5011,262 @@ Return ONLY valid JSON matching this exact structure:
     });
 
     if (target.platform === 'Facebook') {
-      db.oauthSessions.facebook.pageId = target.externalPageId;
-      db.oauthSessions.facebook.pageName = target.pageName;
-      db.oauthSessions.facebook.pageHandle = target.pageHandle;
-      db.oauthSessions.facebook.followersCount = target.followersCount;
+      userDb.oauthSessions.facebook.pageId = target.externalPageId;
+      userDb.oauthSessions.facebook.pageName = target.pageName;
+      userDb.oauthSessions.facebook.pageHandle = target.pageHandle;
+      userDb.oauthSessions.facebook.followersCount = target.followersCount;
       if (target.accessToken) {
-        db.oauthSessions.facebook.pageAccessToken = target.accessToken;
-        db.oauthSessions.facebook.accessToken = target.accessToken;
-        db.oauthSessions.credentials.facebookPageAccessToken = target.accessToken;
+        userDb.oauthSessions.facebook.pageAccessToken = target.accessToken;
+        userDb.oauthSessions.facebook.accessToken = target.accessToken;
+        userDb.oauthSessions.credentials.facebookPageAccessToken = target.accessToken;
       }
-      db.oauthSessions.credentials.facebookPageId = target.externalPageId;
+      userDb.oauthSessions.credentials.facebookPageId = target.externalPageId;
     } else if (target.platform === 'LinkedIn') {
-      db.oauthSessions.linkedin.pageId = target.externalPageId;
-      db.oauthSessions.linkedin.pageName = target.pageName;
-      db.oauthSessions.linkedin.pageHandle = target.pageHandle;
-      db.oauthSessions.linkedin.followersCount = target.followersCount;
-      db.oauthSessions.linkedin.authorUrn = target.externalPageId;
-      db.oauthSessions.credentials.linkedinAuthorUrn = target.externalPageId;
+      userDb.oauthSessions.linkedin.pageId = target.externalPageId;
+      userDb.oauthSessions.linkedin.pageName = target.pageName;
+      userDb.oauthSessions.linkedin.pageHandle = target.pageHandle;
+      userDb.oauthSessions.linkedin.followersCount = target.followersCount;
+      userDb.oauthSessions.linkedin.authorUrn = target.externalPageId;
+      userDb.oauthSessions.credentials.linkedinAuthorUrn = target.externalPageId;
       if (target.accessToken) {
-        db.oauthSessions.linkedin.pageAccessToken = target.accessToken;
-        db.oauthSessions.credentials.linkedinAccessToken = target.accessToken;
+        userDb.oauthSessions.linkedin.pageAccessToken = target.accessToken;
+        userDb.oauthSessions.credentials.linkedinAccessToken = target.accessToken;
       }
     }
 
-    saveDb(db);
+    await saveUserWorkspace(email, userDb);
     return res.json({
       success: true,
       activePage: target,
-      connectedPages: db.connectedPages
+      connectedPages: userDb.connectedPages
     });
   });
 
+  // Re-sync all LinkedIn pages for current active user using saved access token
+  app.post('/api/social/linkedin/resync-pages', async (req, res) => {
+    try {
+      const email = resolveUserEmail(req);
+      const userDb = getUserWorkspace(email);
+      const token =
+        userDb.oauthSessions?.linkedin?.pageAccessToken ||
+        userDb.oauthSessions?.linkedin?.userAccessToken ||
+        userDb.oauthSessions?.linkedin?.token;
+
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          error: 'No active LinkedIn access token found. Please connect your LinkedIn account first.'
+        });
+      }
+
+      console.log(`🔄 Re-syncing LinkedIn Organization Pages for ${email}...`);
+      const orgPages = await scrapeLinkedInOrganizations(token, email);
+
+      if (orgPages.length === 0) {
+        return res.json({
+          success: false,
+          message: 'No LinkedIn organization pages found with your current account permissions.',
+          connectedPages: userDb.connectedPages
+        });
+      }
+
+      // Purge dummy mock pages and merge new scraped pages
+      const existingOther = (userDb.connectedPages || []).filter((p) => {
+        if (p.platform !== 'LinkedIn') return true;
+        const isDummy =
+          p.id === 'page-li-org-1' ||
+          p.id === 'page-li-tech-sheba' ||
+          p.id === 'page-li-corp-107099137' ||
+          p.externalPageId === 'urn:li:organization:1' ||
+          p.externalPageId === 'ext-li-syn-1';
+        if (isDummy) return false;
+        return !orgPages.some((op) => op.externalPageId === p.externalPageId);
+      });
+
+      userDb.connectedPages = [...existingOther, ...orgPages];
+
+      // Ensure at least one page is selected
+      const hasSelected = userDb.connectedPages.some(
+        (p) => p.platform === 'LinkedIn' && p.isSelected
+      );
+      if (!hasSelected && userDb.connectedPages.some((p) => p.platform === 'LinkedIn')) {
+        const firstLi = userDb.connectedPages.find((p) => p.platform === 'LinkedIn')!;
+        firstLi.isSelected = true;
+        userDb.oauthSessions.linkedin.pageId = firstLi.externalPageId;
+        userDb.oauthSessions.linkedin.authorUrn = firstLi.externalPageId;
+        userDb.oauthSessions.linkedin.pageName = firstLi.pageName;
+        userDb.oauthSessions.linkedin.pageHandle = firstLi.pageHandle;
+        userDb.oauthSessions.linkedin.followersCount = firstLi.followersCount;
+      }
+
+      await saveUserWorkspace(email, userDb);
+      return res.json({
+        success: true,
+        scrapedCount: orgPages.length,
+        connectedPages: userDb.connectedPages
+      });
+    } catch (err: any) {
+      console.error('LinkedIn re-sync error:', err);
+      return res.status(500).json({ success: false, error: err?.message || 'Failed to re-sync pages' });
+    }
+  });
+
+  // Manual Page Lookup & Registration by LinkedIn ID or Vanity Name
+  app.post('/api/social/linkedin/lookup-page', async (req, res) => {
+    try {
+      const email = resolveUserEmail(req);
+      const userDb = getUserWorkspace(email);
+      const { query } = req.body || {};
+
+      if (!query || typeof query !== 'string') {
+        return res.status(400).json({ success: false, error: 'LinkedIn Page ID or URL is required.' });
+      }
+
+      const token =
+        userDb.oauthSessions?.linkedin?.pageAccessToken ||
+        userDb.oauthSessions?.linkedin?.userAccessToken ||
+        userDb.oauthSessions?.linkedin?.token;
+
+      if (!token) {
+        return res.status(400).json({
+          success: false,
+          error: 'Please connect LinkedIn first to obtain an authorization token.'
+        });
+      }
+
+      let clean = query.trim();
+      if (clean.includes('/company/')) {
+        clean = clean.split('/company/')[1].split('/')[0].split('?')[0];
+      }
+      clean = clean
+        .replace('urn:li:organization:', '')
+        .replace('urn:li:organizationBrand:', '')
+        .trim();
+
+      let orgUrn = `urn:li:organization:${clean}`;
+      let orgDetail: any = null;
+      let isBrand = false;
+
+      if (/^\d+$/.test(clean)) {
+        // Try standard organization
+        const orgRes = await fetch(`https://api.linkedin.com/v2/organizations/${clean}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'X-Restli-Protocol-Version': '2.0.0'
+          }
+        });
+        if (orgRes.ok) {
+          orgDetail = await orgRes.json();
+          orgUrn = `urn:li:organization:${clean}`;
+        } else {
+          // Try showcase brand
+          const brandRes = await fetch(`https://api.linkedin.com/v2/organizationBrands/${clean}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'X-Restli-Protocol-Version': '2.0.0'
+            }
+          });
+          if (brandRes.ok) {
+            orgDetail = await brandRes.json();
+            orgUrn = `urn:li:organizationBrand:${clean}`;
+            isBrand = true;
+          }
+        }
+      } else {
+        // Vanity name lookup
+        const vRes = await fetch(
+          `https://api.linkedin.com/v2/organizations?q=vanityName&vanityName=${encodeURIComponent(clean)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'X-Restli-Protocol-Version': '2.0.0'
+            }
+          }
+        );
+        if (vRes.ok) {
+          const vData = (await vRes.json()) as any;
+          if (Array.isArray(vData?.elements) && vData.elements.length > 0) {
+            orgDetail = vData.elements[0];
+            orgUrn = `urn:li:organization:${orgDetail.id}`;
+          }
+        }
+      }
+
+      if (!orgDetail) {
+        return res.status(404).json({
+          success: false,
+          error: `Could not resolve LinkedIn page for "${query}". Ensure your LinkedIn account has admin access to this company page.`
+        });
+      }
+
+      const orgId = orgDetail.id || clean;
+      let orgName = orgDetail.localizedName || orgDetail.vanityName || `Organization ${orgId}`;
+      if (orgDetail?.name?.localized) {
+        const locVals = Object.values(orgDetail.name.localized);
+        if (locVals.length > 0) orgName = String(locVals[0]);
+      }
+      const vanityHandle = orgDetail.vanityName
+        ? `linkedin.com/company/${orgDetail.vanityName}`
+        : `linkedin.com/company/${orgId}`;
+
+      let followers = 0;
+      try {
+        const netRes = await fetch(
+          `https://api.linkedin.com/v2/networkSizes/${encodeURIComponent(orgUrn)}?edgeType=CompanyFollowedByMember`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'X-Restli-Protocol-Version': '2.0.0'
+            }
+          }
+        );
+        if (netRes.ok) {
+          const netData = (await netRes.json()) as any;
+          if (typeof netData?.firstDegreeSize === 'number') {
+            followers = netData.firstDegreeSize;
+          }
+        }
+      } catch {}
+
+      const newPage = {
+        id: `page-li-org-${orgId}`,
+        platform: 'LinkedIn' as const,
+        pageName: `${orgName} (Company Page)`,
+        pageHandle: vanityHandle,
+        externalPageId: orgUrn,
+        followersCount: followers,
+        oauthConnected: true,
+        ownerEmail: email,
+        accountType: 'organization' as const,
+        scopes: ['w_organization_social', 'r_organization_social'],
+        lastSyncedAt: 'Live via LinkedIn API',
+        accessToken: token,
+        category: isBrand ? 'Showcase Page' : 'Company Page',
+        isSelected: false
+      };
+
+      // Remove any duplicate of this externalPageId
+      userDb.connectedPages = (userDb.connectedPages || []).filter(
+        (p) => p.externalPageId !== orgUrn
+      );
+      userDb.connectedPages.push(newPage);
+
+      await saveUserWorkspace(email, userDb);
+      return res.json({
+        success: true,
+        page: newPage,
+        connectedPages: userDb.connectedPages
+      });
+    } catch (err: any) {
+      console.error('LinkedIn page lookup error:', err);
+      return res.status(500).json({ success: false, error: err?.message || 'Lookup failed' });
+    }
+  });
+
   // Connect/Add Multi-Channel Social Account (Facebook, Instagram, LinkedIn, X, YouTube)
-  app.post('/api/social/accounts/connect', (req, res) => {
+  app.post('/api/social/accounts/connect', async (req, res) => {
+    const email = resolveUserEmail(req);
+    const userDb = getUserWorkspace(email);
     const {
       platform,
       pageName,
@@ -5047,50 +5316,55 @@ Return ONLY valid JSON matching this exact structure:
       category: category || `${normalizedPlatform} Official Account`,
       pictureUrl: pictureUrl || undefined,
       accessToken: accessToken || undefined,
+      ownerEmail: email,
       isSelected: true
     };
 
     // Deselect previous pages of this platform and make this the newly selected one
-    db.connectedPages = (db.connectedPages || []).map(p =>
+    userDb.connectedPages = (userDb.connectedPages || []).map(p =>
       p.platform === normalizedPlatform ? { ...p, isSelected: false } : p
     );
-    db.connectedPages.unshift(newAccount);
+    userDb.connectedPages.unshift(newAccount);
 
-    // Also update matching integration status in db.integrations
-    db.integrations = (db.integrations || []).map(int =>
+    // Also update matching integration status in userDb.integrations
+    userDb.integrations = (userDb.integrations || []).map(int =>
       int.name.toLowerCase().includes(normalizedPlatform.toLowerCase())
         ? { ...int, status: 'connected', lastSync: 'Just now' }
         : int
     );
 
-    saveDb(db);
+    await saveUserWorkspace(email, userDb);
     return res.json({
       success: true,
       account: newAccount,
-      connectedPages: db.connectedPages
+      connectedPages: userDb.connectedPages
     });
   });
 
   // Disconnect/Remove Social Account
-  app.delete('/api/social/accounts/:id', (req, res) => {
+  app.delete('/api/social/accounts/:id', async (req, res) => {
+    const email = resolveUserEmail(req);
+    const userDb = getUserWorkspace(email);
     const { id } = req.params;
-    db.connectedPages = (db.connectedPages || []).filter(p => p.id !== id);
-    saveDb(db);
+    userDb.connectedPages = (userDb.connectedPages || []).filter(p => p.id !== id);
+    await saveUserWorkspace(email, userDb);
     return res.json({
       success: true,
-      connectedPages: db.connectedPages
+      connectedPages: userDb.connectedPages
     });
   });
 
   // Explicit Social Media Account Logout / Disconnect
   app.post('/api/social/logout', async (req, res) => {
     ensureOAuthSessions();
+    const email = resolveUserEmail(req);
+    const userDb = getUserWorkspace(email);
     const { platform, pageId } = req.body || {};
     const targetPlatform = platform ? String(platform).trim() : null;
     const targetPageId = pageId ? String(pageId).trim() : null;
 
-    if (Array.isArray(db.connectedPages)) {
-      db.connectedPages = db.connectedPages.map(p => {
+    if (Array.isArray(userDb.connectedPages)) {
+      userDb.connectedPages = userDb.connectedPages.map(p => {
         const matchPage = targetPageId && (p.id === targetPageId || p.externalPageId === targetPageId);
         const matchPlatform = targetPlatform && p.platform.toLowerCase() === targetPlatform.toLowerCase();
         if (matchPage || matchPlatform) {
@@ -5108,44 +5382,44 @@ Return ONLY valid JSON matching this exact structure:
     if (targetPlatform) {
       const pLower = targetPlatform.toLowerCase();
       if (pLower.includes('facebook') || pLower.includes('meta')) {
-        db.oauthSessions.facebook.connected = false;
-        (db.oauthSessions.facebook as any).loggedOut = true;
-        db.oauthSessions.facebook.pageAccessToken = undefined;
-        db.oauthSessions.facebook.userAccessToken = undefined;
-        db.oauthSessions.credentials.facebookPageAccessToken = undefined;
+        userDb.oauthSessions.facebook.connected = false;
+        (userDb.oauthSessions.facebook as any).loggedOut = true;
+        userDb.oauthSessions.facebook.pageAccessToken = undefined;
+        userDb.oauthSessions.facebook.userAccessToken = undefined;
+        userDb.oauthSessions.credentials.facebookPageAccessToken = undefined;
       } else if (pLower.includes('linkedin')) {
-        db.oauthSessions.linkedin.connected = false;
-        (db.oauthSessions.linkedin as any).loggedOut = true;
-        db.oauthSessions.linkedin.pageAccessToken = undefined;
-        db.oauthSessions.linkedin.userAccessToken = undefined;
-        db.oauthSessions.credentials.linkedinAccessToken = undefined;
+        userDb.oauthSessions.linkedin.connected = false;
+        (userDb.oauthSessions.linkedin as any).loggedOut = true;
+        userDb.oauthSessions.linkedin.pageAccessToken = undefined;
+        userDb.oauthSessions.linkedin.userAccessToken = undefined;
+        userDb.oauthSessions.credentials.linkedinAccessToken = undefined;
       } else if (pLower.includes('google') || pLower.includes('youtube')) {
-        db.oauthSessions.google.connected = false;
-        (db.oauthSessions.google as any).loggedOut = true;
-        db.oauthSessions.google.accessToken = undefined;
-        db.oauthSessions.credentials.googleAccessToken = undefined;
+        userDb.oauthSessions.google.connected = false;
+        (userDb.oauthSessions.google as any).loggedOut = true;
+        userDb.oauthSessions.google.accessToken = undefined;
+        userDb.oauthSessions.credentials.googleAccessToken = undefined;
       } else if (pLower.includes('hubspot')) {
-        db.oauthSessions.hubspot.connected = false;
-        (db.oauthSessions.hubspot as any).loggedOut = true;
-        db.oauthSessions.hubspot.accessToken = undefined;
-        db.oauthSessions.credentials.hubspotAccessToken = undefined;
+        userDb.oauthSessions.hubspot.connected = false;
+        (userDb.oauthSessions.hubspot as any).loggedOut = true;
+        userDb.oauthSessions.hubspot.accessToken = undefined;
+        userDb.oauthSessions.credentials.hubspotAccessToken = undefined;
       }
     }
 
-    if (targetPlatform && Array.isArray(db.integrations)) {
-      db.integrations = db.integrations.map(int =>
+    if (targetPlatform && Array.isArray(userDb.integrations)) {
+      userDb.integrations = userDb.integrations.map(int =>
         int.name.toLowerCase().includes(targetPlatform.toLowerCase())
           ? { ...int, status: 'disconnected', lastSync: 'Logged out' }
           : int
       );
     }
 
-    await saveDb(db);
+    await saveUserWorkspace(email, userDb);
     return res.json({
       success: true,
       message: `Successfully logged out ${targetPlatform || targetPageId || 'social account'}`,
-      connectedPages: db.connectedPages,
-      state: db
+      connectedPages: userDb.connectedPages,
+      state: userDb
     });
   });
 
@@ -8800,7 +9074,10 @@ Return a structured Brand Profile JSON with:
     db.communityMessages = synthesized.communityMessages;
     db.approvals = synthesized.approvals;
     db.memories = synthesized.memories;
-    db.connectedPages = synthesized.connectedPages;
+    const realConnectedPages = (db.connectedPages || []).filter(
+      (p) => p.oauthConnected || (p.accessToken && !p.id.includes('syn-'))
+    );
+    db.connectedPages = realConnectedPages.length > 0 ? realConnectedPages : synthesized.connectedPages;
     db.geoScore = synthesized.geoScore;
     db.reports = synthesized.reports;
 

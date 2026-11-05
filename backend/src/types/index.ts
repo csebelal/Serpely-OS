@@ -175,6 +175,7 @@ export interface GeoScoreData {
   change30Days: number;
   lastAuditedUrl?: string;
   lastAuditedAt?: string;
+  breakdowns?: any;
   aiEngineBreakdown: {
     engine: 'ChatGPT' | 'Perplexity' | 'Google AI Overviews' | 'Gemini';
     score: number;
@@ -182,6 +183,7 @@ export interface GeoScoreData {
     sentiment: 'Positive' | 'Neutral' | 'Mixed';
     citationsLastWeek: number;
     topQuery: string;
+    trend?: 'up' | 'down' | 'neutral' | string;
   }[];
   hallucinationAlerts: {
     id: string;
@@ -515,11 +517,12 @@ export interface AutomationRule {
 export interface IntegrationItem {
   id: string;
   name: string;
-  category: 'AI Provider' | 'Social' | 'Advertising' | 'Analytics' | 'Productivity' | 'Automation' | 'CRM' | 'MCP' | 'Slack & Discord' | 'Webhook Hub';
+  category: 'AI Provider' | 'Social' | 'Advertising' | 'Analytics' | 'Productivity' | 'Automation' | 'CRM' | 'MCP' | 'Slack & Discord' | 'Webhook Hub' | string;
   status: 'connected' | 'mock-mode' | 'disconnected' | 'error';
   description: string;
-  authMethod: string;
+  authMethod?: string;
   lastSync?: string;
+  icon?: string;
 }
 
 // AutoSocial Integration Types (YouTube Shorts/Long-form & Multi-Channel)
@@ -759,6 +762,8 @@ export interface ConnectedSocialPage {
   accessToken?: string;
   category?: string;
   pictureUrl?: string;
+  ownerEmail?: string;
+  accountType?: 'personal' | 'organization';
 }
 
 export interface PageSocialPost {
@@ -807,16 +812,21 @@ export interface KnowledgeDoc {
 export interface BrandProfile {
   name: string;
   website: string;
+  industry?: string;
+  description?: string;
   tagline: string;
   mission: string;
   voiceTone: string;
-  coreUSPs: string[];
-  competitors: {
+  targetAudience?: string;
+  keyThemes?: string[];
+  brandColors?: string[];
+  coreUSPs?: string[];
+  competitors?: {
     name: string;
     threat: 'High' | 'Medium' | 'Low';
     focus: string;
   }[];
-  brandRules: string[];
+  brandRules?: string[];
   knowledgeDocs?: KnowledgeDoc[];
 }
 
