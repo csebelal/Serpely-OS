@@ -579,6 +579,8 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
         showToast(
           `${platform} connected live via OAuth 2.0! Scraped ${data.scrapedCount || 1} page(s). Active: ${data.pageName || platform}`
         );
+      } else if (data?.type === 'OAUTH_AUTH_ERROR' && data?.provider?.toLowerCase() === platform.toLowerCase()) {
+        showToast(`❌ ${platform} connection failed: ${data.errorDescription || data.error || 'Authorization rejected'}`);
       }
     };
 

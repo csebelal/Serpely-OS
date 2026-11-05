@@ -3249,18 +3249,21 @@ async function startServer() {
 
     const mode = (req.query.mode as string) || 'personal'; // 'personal' or 'company'
     const userEmail = ((req.query.userEmail as string) || '').trim().toLowerCase();
+    const explicitScope = (req.query.scope as string) || (req.query.scopes as string);
 
     // Personal Member Profile requires OpenID Connect (openid, profile, email) + Share on LinkedIn (w_member_social)
-    // Company/Organization Page requires Organization Social permissions
-    let scope = 'openid profile email w_member_social';
-    if (mode === 'company') {
-      scope = 'w_organization_social r_organization_social openid profile email';
-    } else if (process.env.LINKEDIN_SCOPES && !process.env.LINKEDIN_SCOPES.includes('w_organization_social')) {
-      scope = process.env.LINKEDIN_SCOPES;
+    // Company/Organization Page requires Organization Social permissions (w_organization_social r_organization_social)
+    let scope = explicitScope;
+    if (!scope) {
+      if (mode === 'company') {
+        scope = process.env.LINKEDIN_SCOPES || 'w_organization_social r_organization_social';
+      } else {
+        scope = 'openid profile email w_member_social';
+      }
     }
 
     const statePayload = Buffer.from(
-      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail })
+      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail, scope })
     ).toString('base64url');
 
     const params = new URLSearchParams({
@@ -3289,12 +3292,13 @@ async function startServer() {
 
     const mode = (req.query.mode as string) || 'personal';
     const userEmail = ((req.query.userEmail as string) || '').trim().toLowerCase();
-    const scope = mode === 'company'
-      ? 'w_organization_social r_organization_social openid profile email'
-      : 'openid profile email w_member_social';
+    const explicitScope = (req.query.scope as string) || (req.query.scopes as string);
+    const scope = explicitScope || (mode === 'company'
+      ? (process.env.LINKEDIN_SCOPES || 'w_organization_social r_organization_social')
+      : 'openid profile email w_member_social');
 
     const statePayload = Buffer.from(
-      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail })
+      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail, scope })
     ).toString('base64url');
 
     const params = new URLSearchParams({
@@ -3707,6 +3711,124 @@ async function startServer() {
       }
     }
 
+    const oauthError = (req.query.error as string) || '';
+    const oauthErrorDesc = (req.query.error_description as string) || '';
+
+    // Handle OAuth provider error response (e.g., unauthorized_scope_error, redirect_uri_mismatch, access_denied)
+    if (oauthError) {
+      console.warn(`[OAuth Callback] Provider ${provider} error received:`, { oauthError, oauthErrorDesc });
+      const errPayload = JSON.stringify({
+        type: 'OAUTH_AUTH_ERROR',
+        provider,
+        error: oauthError,
+        errorDescription: oauthErrorDesc
+      });
+
+      let guidanceHtml = '';
+      if (oauthError === 'unauthorized_scope_error') {
+        guidanceHtml = `
+          <div style="background:#221515;border:1px solid #7f1d1d;border-radius:12px;padding:16px;margin:18px 0;text-align:left;font-size:13px;line-height:1.6;color:#fecaca;">
+            <p style="font-weight:700;color:#f87171;margin:0 0 8px 0;font-size:14px;">🛠️ যেভাবে সমাধান করবেন (LinkedIn Developer Portal):</p>
+            <ol style="margin:0;padding-left:20px;color:#e2e8f0;">
+              <li style="margin-bottom:6px;">ব্রাউজারে যান: <a href="https://www.linkedin.com/developers/apps/8646lnb8jy77gv/products" target="_blank" style="color:#38bdf8;font-weight:bold;text-decoration:underline;">LinkedIn Developer Portal &gt; Products</a></li>
+              <li style="margin-bottom:6px;">নিচে <strong>"Available products"</strong> থেকে <strong>"Share on LinkedIn"</strong>-এ <em>"Request access"</em> বাটনে ক্লিক করুন (এটি সঙ্গে সঙ্গে বিনামূল্যে চালু হয়ে যায়)।</li>
+              <li style="margin-bottom:6px;">পাশাপাশি <strong>"Sign In with LinkedIn using OpenID Connect"</strong> প্রোডাক্টটিও <em>"Request access"</em> করে সক্রিয় করুন।</li>
+              <li>এরপর Sincly-তে ফিরে এসে আবার <strong>"Connect Personal LinkedIn Profile"</strong>-এ ক্লিক করুন।</li>
+            </ol>
+          </div>
+        `;
+      } else if (oauthError === 'redirect_uri_mismatch') {
+        guidanceHtml = `
+          <div style="background:#221515;border:1px solid #7f1d1d;border-radius:12px;padding:16px;margin:18px 0;text-align:left;font-size:13px;line-height:1.6;color:#fecaca;">
+            <p style="font-weight:700;color:#f87171;margin:0 0 8px 0;font-size:14px;">🛠️ Redirect URI Mismatch সমাধান:</p>
+            <p style="color:#e2e8f0;margin:0 0 8px 0;">আপনার LinkedIn App-এর <strong>Auth</strong> ট্যাবে <strong>Authorized redirect URLs for your app</strong>-এ এই লিংকটি হুবহু যোগ করুন:</p>
+            <div style="background:#0f172a;padding:8px 12px;border-radius:6px;font-family:monospace;color:#38bdf8;word-break:break-all;font-size:12px;">
+              ${redirectUri}
+            </div>
+          </div>
+        `;
+      } else {
+        guidanceHtml = `
+          <div style="background:#221515;border:1px solid #7f1d1d;border-radius:12px;padding:16px;margin:18px 0;text-align:left;font-size:13px;line-height:1.6;color:#fecaca;">
+            <p style="font-weight:700;color:#f87171;margin:0 0 6px 0;">Error Details:</p>
+            <p style="color:#e2e8f0;margin:0;">${oauthErrorDesc || oauthError}</p>
+          </div>
+        `;
+      }
+
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8"/>
+            <title>OAuth Connection Failed · Sincly</title>
+          </head>
+          <body style="background:#090d0b;color:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;box-sizing:border-box;">
+            <div style="background:#131815;border:1px solid #2d3732;padding:32px;border-radius:20px;max-width:520px;width:100%;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7);">
+              <div style="width:56px;height:56px;border-radius:50%;background:#451a1a;color:#ef4444;display:flex;align-items:center;justify-content:center;margin:0 auto 16px auto;font-size:26px;font-weight:bold;border:2px solid #7f1d1d;">✕</div>
+              <h2 style="font-size:20px;margin:0 0 8px 0;color:#f87171;font-weight:700;">${provider} Authorization Rejected</h2>
+              <p style="font-size:13px;color:#94a3b8;margin:0 0 16px 0;">LinkedIn authorization could not be completed.</p>
+              
+              <div style="background:#181e1a;border:1px solid #27312b;border-radius:10px;padding:10px 14px;font-family:monospace;font-size:12px;color:#fca5a5;word-break:break-word;text-align:left;">
+                <strong>Error:</strong> ${oauthError}<br/>
+                ${oauthErrorDesc ? `<strong>Details:</strong> ${oauthErrorDesc}` : ''}
+              </div>
+
+              ${guidanceHtml}
+
+              <div style="display:flex;gap:12px;justify-content:center;margin-top:20px;">
+                <button onclick="window.close()" style="padding:10px 24px;border-radius:10px;background:#ef4444;hover:background:#dc2626;color:#fff;border:none;font-weight:600;font-size:13px;cursor:pointer;transition:all 0.2s;">
+                  Close Window
+                </button>
+              </div>
+            </div>
+            <script>
+              try {
+                localStorage.setItem('serpely_oauth_event', JSON.stringify(${errPayload}));
+              } catch (e) {}
+              try {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage(${errPayload}, '*');
+                }
+              } catch (e) {}
+            </script>
+          </body>
+        </html>
+      `);
+    }
+
+    if (!code) {
+      const errPayload = JSON.stringify({
+        type: 'OAUTH_AUTH_ERROR',
+        provider,
+        error: 'missing_code',
+        errorDescription: 'No authorization code was returned by the provider.'
+      });
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><meta charset="utf-8"/><title>Authorization Incomplete · Sincly</title></head>
+          <body style="background:#090d0b;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;">
+            <div style="background:#131815;border:1px solid #2d3732;padding:32px;border-radius:20px;max-width:440px;">
+              <div style="font-size:32px;margin-bottom:12px;color:#f59e0b;">⚠️</div>
+              <h2 style="font-size:18px;margin:0 0 8px 0;color:#f59e0b;">Authorization Incomplete</h2>
+              <p style="font-size:13px;color:#94a3b8;margin:0 0 16px 0;">No authorization code was received. Please try connecting again.</p>
+              <button onclick="window.close()" style="padding:8px 20px;border-radius:8px;background:#374151;color:#fff;border:none;cursor:pointer;">Close Window</button>
+            </div>
+            <script>
+              try {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage(${errPayload}, '*');
+                }
+              } catch (e) {}
+            </script>
+          </body>
+        </html>
+      `);
+    }
+
+    let authSuccess = false;
+    let exchangeErrorMessage: string | null = null;
     let pagePayload: Record<string, unknown> = { provider };
     const live = getLiveCredentials();
     const linkedinSession = db.oauthSessions.linkedin;
@@ -3743,6 +3865,7 @@ async function startServer() {
         const tokenData = (await tokenRes.json()) as any;
 
         if (tokenData.access_token) {
+          authSuccess = true;
           console.log('Successfully exchanged code for LinkedIn Access Token with scopes:', tokenData.scope);
           linkedinSession.userAccessToken = tokenData.access_token;
           linkedinSession.pageAccessToken = tokenData.access_token;
@@ -3911,9 +4034,13 @@ async function startServer() {
             scrapedCount: scrapedLiPages.length,
             connectedPages: db.connectedPages
           };
+        } else {
+          exchangeErrorMessage = tokenData.error_description || tokenData.error || 'LinkedIn access token exchange failed';
+          console.error('[LinkedIn OAuth] Token response error:', tokenData);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('LinkedIn OAuth token exchange error:', err);
+        exchangeErrorMessage = `LinkedIn token exchange network error: ${err?.message || 'Failed to connect'}`;
       }
     }
 
@@ -3937,6 +4064,7 @@ async function startServer() {
         const tokenData = (await tokenRes.json()) as any;
 
         if (tokenData.access_token) {
+          authSuccess = true;
           facebookSession.userAccessToken = tokenData.access_token;
           facebookSession.connected = true;
           facebookSession.lastSyncedAt = 'Live via Meta Graph API';
@@ -4029,9 +4157,12 @@ async function startServer() {
             scrapedCount: scrapedFbPages.length,
             connectedPages: db.connectedPages
           };
+        } else {
+          exchangeErrorMessage = tokenData.error?.message || 'Meta token exchange failed';
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Meta OAuth token exchange error:', err);
+        exchangeErrorMessage = `Meta token exchange error: ${err?.message || 'Failed'}`;
       }
     }
 
@@ -4057,6 +4188,7 @@ async function startServer() {
         });
         const tokenData = (await tokenRes.json()) as any;
         if (tokenData.access_token) {
+          authSuccess = true;
           googleSession.accessToken = tokenData.access_token;
           if (tokenData.refresh_token) googleSession.refreshToken = tokenData.refresh_token;
           db.oauthSessions.credentials.googleAccessToken = tokenData.access_token;
@@ -4121,6 +4253,7 @@ async function startServer() {
         });
         const tokenData = (await tokenRes.json()) as any;
         if (tokenData.access_token) {
+          authSuccess = true;
           hubspotSession.accessToken = tokenData.access_token;
           if (tokenData.refresh_token) hubspotSession.refreshToken = tokenData.refresh_token;
           db.oauthSessions.credentials.hubspotAccessToken = tokenData.access_token;
@@ -4140,10 +4273,43 @@ async function startServer() {
             pageName: hubspotSession.accountName,
             lastSyncedAt: hubspotSession.lastSyncedAt
           };
+        } else {
+          exchangeErrorMessage = tokenData.message || tokenData.error || 'HubSpot token exchange failed';
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('HubSpot OAuth token exchange error:', err);
+        exchangeErrorMessage = `HubSpot token exchange error: ${err?.message || 'Failed'}`;
       }
+    }
+
+    if (!authSuccess || exchangeErrorMessage) {
+      const errPayload = JSON.stringify({
+        type: 'OAUTH_AUTH_ERROR',
+        provider,
+        error: 'token_exchange_failed',
+        errorDescription: exchangeErrorMessage || `${provider} authentication was not completed.`
+      });
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><meta charset="utf-8"/><title>Authentication Failed · Sincly</title></head>
+          <body style="background:#090d0b;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;">
+            <div style="background:#131815;border:1px solid #3f2020;padding:32px;border-radius:20px;max-width:440px;">
+              <div style="font-size:32px;margin-bottom:12px;color:#ef4444;">✕</div>
+              <h2 style="font-size:18px;margin:0 0 8px 0;color:#ef4444;">Authentication Failed</h2>
+              <p style="font-size:13px;color:#94a3b8;margin:0 0 16px 0;">${exchangeErrorMessage || 'Unable to retrieve access token.'}</p>
+              <button onclick="window.close()" style="padding:8px 20px;border-radius:8px;background:#ef4444;color:#fff;border:none;cursor:pointer;font-weight:600;">Close Window</button>
+            </div>
+            <script>
+              try {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage(${errPayload}, '*');
+                }
+              } catch (e) {}
+            </script>
+          </body>
+        </html>
+      `);
     }
 
     const serializedPayload = JSON.stringify({

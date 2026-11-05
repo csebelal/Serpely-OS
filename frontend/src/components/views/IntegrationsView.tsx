@@ -281,6 +281,10 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
           })
           .catch(() => {});
         setActiveModalProvider(null);
+      } else if (data?.type === 'OAUTH_AUTH_ERROR') {
+        const provider = data.provider || 'Provider';
+        const desc = data.errorDescription || data.error || 'Authentication rejected';
+        showBanner(`${provider} connection failed: ${desc}`, 'error');
       }
     };
 

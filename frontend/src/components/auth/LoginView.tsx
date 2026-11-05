@@ -521,7 +521,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   {/* Highlighted Account Switch Callout with crystal-clear contrast and crisp hover */}
                   <div
                     onClick={toggleAuthMode}
-                    className="group p-3.5 rounded-2xl bg-[#ecfdf5] hover:bg-[#d1fae5] border border-[#a7f3d0] hover:border-[#6ee7b7] text-center shadow-xs hover:shadow transition-all duration-200 cursor-pointer"
+                    className="group p-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100/90 border-2 border-emerald-300 hover:border-emerald-500 text-center shadow-sm hover:shadow transition-all duration-200 cursor-pointer"
                   >
                     <button
                       type="button"
@@ -529,16 +529,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       tabIndex={-1}
                     >
                       {isSignUp ? (
-                        <span className="text-[#334155] group-hover:text-[#0f172a] transition-colors">
+                        <span className="text-[#0f172a] font-bold group-hover:text-black transition-colors" style={{ color: '#0f172a' }}>
                           Already have an account?{' '}
-                          <span className="text-[#047857] group-hover:text-[#064e3b] underline underline-offset-2 font-extrabold transition-colors">
+                          <span className="text-[#047857] group-hover:text-[#064e3b] underline underline-offset-4 font-extrabold transition-colors" style={{ color: '#047857' }}>
                             Sign in now
                           </span>
                         </span>
                       ) : (
-                        <span className="text-[#334155] group-hover:text-[#0f172a] transition-colors">
+                        <span className="text-[#0f172a] font-bold group-hover:text-black transition-colors" style={{ color: '#0f172a' }}>
                           Don't have an account?{' '}
-                          <span className="text-[#047857] group-hover:text-[#064e3b] underline underline-offset-2 font-extrabold transition-colors">
+                          <span className="text-[#047857] group-hover:text-[#064e3b] underline underline-offset-4 font-extrabold transition-colors" style={{ color: '#047857' }}>
                             Sign up now
                           </span>
                         </span>

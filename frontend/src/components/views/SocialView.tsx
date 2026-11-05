@@ -175,6 +175,9 @@ export const SocialView: React.FC<SocialViewProps> = ({
             }
           })
           .catch(() => {});
+      } else if (data?.type === 'OAUTH_AUTH_ERROR' && data.provider === 'LinkedIn') {
+        const errorMsg = data.errorDescription || data.error || 'Authorization rejected';
+        showNotification(`⚠️ LinkedIn Error: ${errorMsg}`);
       }
     };
 
