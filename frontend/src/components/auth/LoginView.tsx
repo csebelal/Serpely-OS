@@ -27,8 +27,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
 }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('support@serpely.com');
-  const [password, setPassword] = useState('123454321');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -41,14 +41,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setIsSignUp(nextMode);
     setErrorMessage(null);
     setSuccessMessage(null);
-    if (nextMode) {
-      if (email === 'support@serpely.com') setEmail('');
-      if (password === '123454321') setPassword('');
-      setConfirmPassword('');
-    } else {
-      if (!email) setEmail('support@serpely.com');
-      if (!password) setPassword('123454321');
-    }
+    setConfirmPassword('');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -433,7 +426,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       required
                       value={email}
                       onChange={e => setEmail(e.target.value)}
-                      placeholder="dash@ui8.net"
+                      placeholder="name@company.com"
                       className="w-full py-3.5 pr-4 text-xs font-mono text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
                     />
                   </div>
@@ -453,7 +446,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       required
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      placeholder="Password"
+                      placeholder="Enter your password"
                       className="w-full py-3.5 pr-10 text-xs font-mono text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
                     />
                     <button

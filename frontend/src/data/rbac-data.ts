@@ -178,7 +178,7 @@ export const authenticateCredentials = (
 
   return {
     success: false,
-    error: 'No account found with this email. Use support@serpely.com or create a new role/user.'
+    error: 'No account found with this email. Please click "Sign up now" below to create a new account.'
   };
 };
 
