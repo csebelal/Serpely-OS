@@ -21,10 +21,13 @@ import {
   Database,
   Sun,
   Moon,
-  Palette
+  Palette,
+  PlusCircle
 } from 'lucide-react';
 import { mockAgents, mockBrandProfile } from '../../data/mock-data';
-import { BrandProfile, UserRole } from '../../types';
+import { BrandProfile, UserRole, RolePermissionConfig } from '../../types';
+import { getStoredRoles, deleteCustomRole, BASE_ROLE_CONFIGS } from '../../data/rbac-data';
+import { CreateRoleModal } from '../auth/CreateRoleModal';
 
 interface SettingsViewProps {
   brandProfile?: BrandProfile;
@@ -57,6 +60,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [brandTagline, setBrandTagline] = useState(brandProfile.tagline);
   const [brandVoice, setBrandVoice] = useState(brandProfile.voiceTone);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isCreateRoleOpen, setIsCreateRoleOpen] = useState(false);
+  const [rolesMap, setRolesMap] = useState<Record<string, RolePermissionConfig>>(() => getStoredRoles());
+
+  useEffect(() => {
+    const handleRolesUpdate = () => setRolesMap(getStoredRoles());
+    window.addEventListener('serpely_roles_updated', handleRolesUpdate);
+    return () => window.removeEventListener('serpely_roles_updated', handleRolesUpdate);
+  }, []);
 
   // Live API Keys & Integrations Vault (Auto-Syncs to .env)
   const [credGeminiKey, setCredGeminiKey] = useState('');
@@ -1001,10 +1012,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <Users className="h-4 w-4 text-emerald-400" />
             <span>Role-Based Access Control (RBAC)</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-neutral-400 font-mono">
               Current Active Authority: <strong className="text-emerald-400 uppercase">{currentRole}</strong>
             </span>
+            <button
+              type="button"
+              onClick={() => setIsCreateRoleOpen(true)}
+              className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-xs font-semibold text-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <PlusCircle className="h-3.5 w-3.5" />
+              <span>Create Role</span>
+            </button>
             {onOpenLogin && (
               <button
                 type="button"
@@ -1018,151 +1037,81 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
-        {/* 4 Interactive Role Cards matching user's exact specification */}
+        {/* Dynamic Interactive Role Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-          {/* Owner */}
-          <div
-            onClick={() => onSwitchRole?.('owner')}
-            className={`p-3.5 rounded-xl transition-all cursor-pointer border flex flex-col justify-between ${
-              currentRole === 'owner'
-                ? 'bg-neutral-950 border-amber-500/60 ring-1 ring-amber-500/40 shadow-lg shadow-amber-500/10'
-                : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/60'
-            }`}
-          >
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-bold text-white">
-                  <Crown className="h-3.5 w-3.5 text-amber-400" />
-                  <span>Owner</span>
-                </div>
-                {currentRole === 'owner' ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Active
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-neutral-500 font-medium">Click to switch</span>
-                )}
-              </div>
-              <p className="text-[11px] font-semibold text-amber-300/90">
-                Full workspace control
-              </p>
-              <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Complete administrative authority over API vault, billing, brand profile, approvals, and team invitations.
-              </p>
-            </div>
-            <div className="pt-2.5 mt-2.5 border-t border-neutral-800/80 flex items-center justify-between text-[10px] text-neutral-500">
-              <span>All Permissions</span>
-              <span className="text-amber-400 font-mono">Unrestricted</span>
-            </div>
-          </div>
+          {Object.values(rolesMap).map(roleCfg => {
+            const isActive = currentRole === roleCfg.role;
+            const isBase = Boolean(BASE_ROLE_CONFIGS[roleCfg.role]);
 
-          {/* Director (Active by default) */}
-          <div
-            onClick={() => onSwitchRole?.('director')}
-            className={`p-3.5 rounded-xl transition-all cursor-pointer border flex flex-col justify-between ${
-              currentRole === 'director'
-                ? 'bg-neutral-950 border-emerald-500/60 ring-1 ring-emerald-500/40 shadow-lg shadow-emerald-500/10'
-                : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/60'
-            }`}
-          >
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-bold text-white">
-                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>Director</span>
-                </div>
-                {currentRole === 'director' ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Active
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-neutral-500 font-medium">Click to switch</span>
-                )}
-              </div>
-              <p className="text-[11px] font-semibold text-emerald-300/90">
-                Approvals & ad spend sign-off
-              </p>
-              <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Human-in-the-Loop executive gateway. Signs off on ad budgets, approves outbound social & email broadcasts.
-              </p>
-            </div>
-            <div className="pt-2.5 mt-2.5 border-t border-neutral-800/80 flex items-center justify-between text-[10px] text-neutral-500">
-              <span>Approval Gates</span>
-              <span className="text-emerald-400 font-mono">Full Sign-off</span>
-            </div>
-          </div>
+            const getRoleIcon = () => {
+              if (roleCfg.role === 'owner') return <Crown className="h-3.5 w-3.5 text-amber-400" />;
+              if (roleCfg.role === 'director') return <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />;
+              if (roleCfg.role === 'editor') return <FileEdit className="h-3.5 w-3.5 text-sky-400" />;
+              if (roleCfg.role === 'viewer') return <BarChart3 className="h-3.5 w-3.5 text-purple-400" />;
+              return <KeyRound className="h-3.5 w-3.5 text-indigo-400" />;
+            };
 
-          {/* Editor */}
-          <div
-            onClick={() => onSwitchRole?.('editor')}
-            className={`p-3.5 rounded-xl transition-all cursor-pointer border flex flex-col justify-between ${
-              currentRole === 'editor'
-                ? 'bg-neutral-950 border-sky-500/60 ring-1 ring-sky-500/40 shadow-lg shadow-sky-500/10'
-                : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/60'
-            }`}
-          >
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-bold text-white">
-                  <FileEdit className="h-3.5 w-3.5 text-sky-400" />
-                  <span>Editor</span>
+            return (
+              <div
+                key={roleCfg.role}
+                onClick={() => onSwitchRole?.(roleCfg.role)}
+                className={`p-3.5 rounded-xl transition-all cursor-pointer border flex flex-col justify-between ${
+                  isActive
+                    ? 'bg-neutral-950 border-emerald-500/60 ring-1 ring-emerald-500/40 shadow-lg shadow-emerald-500/10'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/60'
+                }`}
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-bold text-white">
+                      {getRoleIcon()}
+                      <span>{roleCfg.label}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!isBase && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Delete custom role "${roleCfg.label}"?`)) {
+                              deleteCustomRole(roleCfg.role);
+                            }
+                          }}
+                          className="p-1 text-neutral-500 hover:text-rose-400 rounded transition-colors"
+                          title="Delete custom role"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                      {isActive ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-neutral-500 font-medium">Switch</span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-semibold text-emerald-300/90">
+                    {roleCfg.tagline}
+                  </p>
+                  <p className="text-[11px] text-neutral-400 leading-relaxed line-clamp-2">
+                    {roleCfg.isReadOnly
+                      ? 'Read-only analytics and reporting rights.'
+                      : roleCfg.canApproveSpend
+                      ? 'Executive authority with ad budget and publishing gates.'
+                      : 'Creative execution with asset drafting and staging rights.'}
+                  </p>
                 </div>
-                {currentRole === 'editor' ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                    Active
+                <div className="pt-2.5 mt-2.5 border-t border-neutral-800/80 flex items-center justify-between text-[10px] text-neutral-500">
+                  <span>{isBase ? 'System Role' : 'Custom Role'}</span>
+                  <span className="text-emerald-400 font-mono">
+                    {roleCfg.isReadOnly ? 'Read-Only' : 'Active'}
                   </span>
-                ) : (
-                  <span className="text-[10px] text-neutral-500 font-medium">Click to switch</span>
-                )}
-              </div>
-              <p className="text-[11px] font-semibold text-sky-300/90">
-                Draft & schedule assets
-              </p>
-              <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Builds campaigns, authors copy with AI, drafts social calendar posts, and designs email templates.
-              </p>
-            </div>
-            <div className="pt-2.5 mt-2.5 border-t border-neutral-800/80 flex items-center justify-between text-[10px] text-neutral-500">
-              <span>Asset Generation</span>
-              <span className="text-sky-400 font-mono">Draft & Schedule</span>
-            </div>
-          </div>
-
-          {/* Viewer */}
-          <div
-            onClick={() => onSwitchRole?.('viewer')}
-            className={`p-3.5 rounded-xl transition-all cursor-pointer border flex flex-col justify-between ${
-              currentRole === 'viewer'
-                ? 'bg-neutral-950 border-purple-500/60 ring-1 ring-purple-500/40 shadow-lg shadow-purple-500/10'
-                : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/60'
-            }`}
-          >
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-bold text-white">
-                  <BarChart3 className="h-3.5 w-3.5 text-purple-400" />
-                  <span>Viewer</span>
                 </div>
-                {currentRole === 'viewer' ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    Active
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-neutral-500 font-medium">Click to switch</span>
-                )}
               </div>
-              <p className="text-[11px] font-semibold text-purple-300/90">
-                Read-only analytics
-              </p>
-              <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Full read-only observation rights across dashboards, lead pipelines, SEO audits, and revenue attribution.
-              </p>
-            </div>
-            <div className="pt-2.5 mt-2.5 border-t border-neutral-800/80 flex items-center justify-between text-[10px] text-neutral-500">
-              <span>Read-Only Mode</span>
-              <span className="text-purple-400 font-mono">Auditing Only</span>
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* RBAC Matrix Table */}
@@ -1217,6 +1166,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </table>
         </div>
       </div>
+
+      <CreateRoleModal
+        isOpen={isCreateRoleOpen}
+        onClose={() => setIsCreateRoleOpen(false)}
+        onRoleCreated={() => setRolesMap(getStoredRoles())}
+      />
     </div>
   );
 };

@@ -27,7 +27,8 @@ import {
 } from '../../types';
 import {
   ROLE_CONFIGS,
-  getAuthUserByRole
+  getAuthUserByRole,
+  DEFAULT_ADMIN_USER
 } from '../../data/rbac-data';
 import { LoginView } from '../auth/LoginView';
 import {
@@ -71,8 +72,70 @@ import { MeetingsView } from '../views/MeetingsView';
 import { DashboardSkeleton } from '../dashboard/DashboardSkeleton';
 import { GlobalSearchModal } from '../common/GlobalSearchModal';
 
+export const VIEW_TO_PATH: Record<ViewId, string> = {
+  dashboard: '/dashboard',
+  overview: '/overview',
+  agents: '/agents',
+  'marketing-hub': '/marketing-hub',
+  campaigns: '/campaigns',
+  content: '/content',
+  social: '/social',
+  seo: '/seo',
+  email: '/email',
+  leads: '/leads',
+  meetings: '/meetings',
+  community: '/community',
+  analytics: '/analytics',
+  approvals: '/approvals',
+  automation: '/automation',
+  reports: '/reports',
+  integrations: '/integrations',
+  settings: '/settings'
+};
+
+export const PATH_TO_VIEW: Record<string, ViewId> = {
+  '': 'dashboard',
+  '/': 'dashboard',
+  '/dashboard': 'dashboard',
+  '/overview': 'overview',
+  '/architecture': 'overview',
+  '/agents': 'agents',
+  '/marketing-hub': 'marketing-hub',
+  '/knowledge': 'marketing-hub',
+  '/campaigns': 'campaigns',
+  '/content': 'content',
+  '/social': 'social',
+  '/seo': 'seo',
+  '/email': 'email',
+  '/leads': 'leads',
+  '/meetings': 'meetings',
+  '/community': 'community',
+  '/analytics': 'analytics',
+  '/approvals': 'approvals',
+  '/automation': 'automation',
+  '/reports': 'reports',
+  '/integrations': 'integrations',
+  '/settings': 'settings'
+};
+
+export const getViewFromPathname = (pathname: string): { view: ViewId; isLogin: boolean } => {
+  const norm = (pathname || '').replace(/\/+$/, '') || '/';
+  if (norm.toLowerCase() === '/login') {
+    return { view: 'dashboard', isLogin: true };
+  }
+  const found = PATH_TO_VIEW[norm.toLowerCase()];
+  if (found) {
+    return { view: found, isLogin: false };
+  }
+  return { view: 'dashboard', isLogin: false };
+};
+
 export const AppShell: React.FC = () => {
-  const [activeView, setActiveView] = useState<ViewId>('dashboard');
+  const initialRoute = typeof window !== 'undefined'
+    ? getViewFromPathname(window.location.pathname)
+    : { view: 'dashboard' as ViewId, isLogin: false };
+
+  const [activeView, setActiveView] = useState<ViewId>(initialRoute.view);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -135,31 +198,104 @@ export const AppShell: React.FC = () => {
   // Role-Based Access Control (RBAC) User Session
   const [currentUser, setCurrentUser] = useState<AuthUser>(() => {
     try {
+      const savedUser = localStorage.getItem('serpely_authenticated_user');
+      if (savedUser) {
+        return JSON.parse(savedUser);
+      }
       const saved = localStorage.getItem('serpely_active_role') as UserRole;
-      if (saved && (saved === 'owner' || saved === 'director' || saved === 'editor' || saved === 'viewer')) {
+      if (saved) {
         return getAuthUserByRole(saved);
       }
     } catch {}
-    return getAuthUserByRole('director');
+    return DEFAULT_ADMIN_USER;
   });
-  const [isAuthScreenOpen, setIsAuthScreenOpen] = useState(false);
+
+  const [isAuthScreenOpen, setIsAuthScreenOpen] = useState<boolean>(() => {
+    if (initialRoute.isLogin) return true;
+    try {
+      const saved = localStorage.getItem('serpely_authenticated_user');
+      if (saved) return false;
+    } catch {}
+    return true;
+  });
+
+  const handleNavigate = (view: ViewId, replace = false) => {
+    setActiveView(view);
+    const targetPath = VIEW_TO_PATH[view] || '/dashboard';
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      if (replace) {
+        window.history.replaceState({ view }, '', targetPath);
+      } else {
+        window.history.pushState({ view }, '', targetPath);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (window.location.pathname === '' || window.location.pathname === '/') {
+      window.history.replaceState({ view: 'dashboard' }, '', '/dashboard');
+    }
+
+    const handlePopState = () => {
+      const route = getViewFromPathname(window.location.pathname);
+      setActiveView(route.view);
+      setIsAuthScreenOpen(route.isLogin);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const handleSwitchRole = (newRole: UserRole) => {
     const user = getAuthUserByRole(newRole);
     setCurrentUser(user);
     try {
       localStorage.setItem('serpely_active_role', newRole);
+      localStorage.setItem('serpely_authenticated_user', JSON.stringify(user));
     } catch {}
-    showToast(`Workspace role switched to ${ROLE_CONFIGS[newRole].label}: "${ROLE_CONFIGS[newRole].tagline}".`);
+    showToast(`Workspace role switched to ${user.title || newRole.toUpperCase()}.`);
   };
 
   const handleLogin = (user: AuthUser) => {
     setCurrentUser(user);
     setIsAuthScreenOpen(false);
     try {
+      localStorage.setItem('serpely_authenticated_user', JSON.stringify(user));
       localStorage.setItem('serpely_active_role', user.role);
     } catch {}
-    showToast(`Signed in as ${user.name} (${ROLE_CONFIGS[user.role].label}). Full permissions unlocked.`);
+    const targetPath = VIEW_TO_PATH[activeView] || '/dashboard';
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      window.history.pushState({ view: activeView }, '', targetPath);
+    }
+    showToast(`Signed in as ${user.name} (${user.role.toUpperCase()}). Full permissions active.`);
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('serpely_authenticated_user');
+    } catch {}
+    setIsAuthScreenOpen(true);
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ isLogin: true }, '', '/login');
+    }
+    showToast('Signed out of workspace.');
+  };
+
+  const handleOpenLogin = () => {
+    setIsAuthScreenOpen(true);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.history.pushState({ isLogin: true }, '', '/login');
+    }
+  };
+
+  const handleCloseLogin = () => {
+    setIsAuthScreenOpen(false);
+    const targetPath = VIEW_TO_PATH[activeView] || '/dashboard';
+    if (typeof window !== 'undefined' && window.location.pathname === '/login') {
+      window.history.pushState({ view: activeView }, '', targetPath);
+    }
   };
 
   const applyServerState = (serverState: any) => {
@@ -377,7 +513,7 @@ export const AppShell: React.FC = () => {
   const renderActiveView = () => {
     switch (activeView) {
       case 'overview':
-        return <OverviewView onNavigate={setActiveView} onOpenCommand={() => setCommandOpen(true)} />;
+        return <OverviewView onNavigate={handleNavigate} onOpenCommand={() => setCommandOpen(true)} />;
       case 'dashboard':
         return (
           <DashboardView
@@ -385,7 +521,7 @@ export const AppShell: React.FC = () => {
             approvals={approvals}
             campaigns={campaigns}
             socialPosts={socialPosts}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onOpenCommand={() => setCommandOpen(true)}
             onApproveItem={handleApprove}
           />
@@ -395,7 +531,7 @@ export const AppShell: React.FC = () => {
           <AgentsView
             agents={agents}
             onOpenCommand={() => setCommandOpen(true)}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onStateSynced={applyServerState}
           />
         );
@@ -418,7 +554,7 @@ export const AppShell: React.FC = () => {
           <CampaignsView
             campaigns={campaigns}
             onOpenCommand={() => setCommandOpen(true)}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onStateSynced={applyServerState}
             onUpdateCampaigns={nextCampaigns => {
               setCampaigns(nextCampaigns);
@@ -438,7 +574,7 @@ export const AppShell: React.FC = () => {
               persistPartialState({ contentList: nextContent });
             }}
             brandName={brandProfile.name}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onStateSynced={applyServerState}
           />
         );
@@ -446,7 +582,7 @@ export const AppShell: React.FC = () => {
         return (
           <SocialView
             onOpenCommand={() => setCommandOpen(true)}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             connectedPages={connectedPages}
             pagePosts={pagePosts}
             socialPosts={socialPosts}
@@ -490,7 +626,7 @@ export const AppShell: React.FC = () => {
           <EmailView
             brandProfile={brandProfile}
             onOpenCommand={() => setCommandOpen(true)}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onSubmitApproval={(newApp: ApprovalItem) => {
               const nextApprovals = [newApp, ...approvals];
               setApprovals(nextApprovals);
@@ -502,7 +638,7 @@ export const AppShell: React.FC = () => {
       case 'leads':
         return (
           <LeadsView
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onOpenCommand={() => setCommandOpen(true)}
             leadsList={leads}
             brandName={brandProfile.name}
@@ -526,14 +662,14 @@ export const AppShell: React.FC = () => {
               setMeetings(nextMeetings);
               persistPartialState({ meetings: nextMeetings });
             }}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onShowToast={showToast}
           />
         );
       case 'community':
         return (
           <CommunityView
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onOpenCommand={() => setCommandOpen(true)}
             messagesList={communityMessages}
             onUpdateMessages={nextMsgs => {
@@ -556,7 +692,7 @@ export const AppShell: React.FC = () => {
       case 'analytics':
         return (
           <AnalyticsView
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onOpenCommand={() => setCommandOpen(true)}
             pagePosts={pagePosts}
             onUpdatePagePosts={nextPosts => {
@@ -616,7 +752,7 @@ export const AppShell: React.FC = () => {
               persistPartialState({ integrations: nextInts });
             }}
             onStateSynced={applyServerState}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
           />
         );
       case 'settings':
@@ -631,7 +767,7 @@ export const AppShell: React.FC = () => {
             onResetWorkspace={handleResetWorkspace}
             currentRole={currentUser.role}
             onSwitchRole={handleSwitchRole}
-            onOpenLogin={() => setIsAuthScreenOpen(true)}
+            onOpenLogin={handleOpenLogin}
             appTheme={appTheme}
             onToggleTheme={handleToggleTheme}
           />
@@ -643,7 +779,7 @@ export const AppShell: React.FC = () => {
             approvals={approvals}
             campaigns={campaigns}
             socialPosts={socialPosts}
-            onNavigate={setActiveView}
+            onNavigate={handleNavigate}
             onOpenCommand={() => setCommandOpen(true)}
             onApproveItem={handleApprove}
           />
@@ -657,7 +793,7 @@ export const AppShell: React.FC = () => {
       <div className="hidden lg:flex shrink-0 h-full">
         <Sidebar
           activeView={activeView}
-          onSelectView={setActiveView}
+          onSelectView={handleNavigate}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           pendingApprovalsCount={pendingApprovalsCount}
@@ -665,7 +801,7 @@ export const AppShell: React.FC = () => {
           brandName={brandProfile.name}
           currentUser={currentUser}
           onSwitchRole={handleSwitchRole}
-          onOpenLogin={() => setIsAuthScreenOpen(true)}
+          onOpenLogin={handleOpenLogin}
         />
       </div>
 
@@ -689,7 +825,7 @@ export const AppShell: React.FC = () => {
               <Sidebar
                 activeView={activeView}
                 onSelectView={v => {
-                  setActiveView(v);
+                  handleNavigate(v);
                   setMobileSidebarOpen(false);
                 }}
                 collapsed={false}
@@ -699,7 +835,7 @@ export const AppShell: React.FC = () => {
                 brandName={brandProfile.name}
                 currentUser={currentUser}
                 onSwitchRole={handleSwitchRole}
-                onOpenLogin={() => setIsAuthScreenOpen(true)}
+                onOpenLogin={handleOpenLogin}
               />
             </motion.div>
             <div className="flex-1" onClick={() => setMobileSidebarOpen(false)} />
@@ -713,7 +849,7 @@ export const AppShell: React.FC = () => {
           activeView={activeView}
           onOpenCommand={() => setCommandOpen(true)}
           onOpenSearch={() => setSearchOpen(true)}
-          onSelectView={setActiveView}
+          onSelectView={handleNavigate}
           pendingApprovalsCount={pendingApprovalsCount}
           onToggleMobileSidebar={() => setMobileSidebarOpen(true)}
           brandName={brandProfile.name}
@@ -723,7 +859,8 @@ export const AppShell: React.FC = () => {
           onToggleTheme={handleToggleTheme}
           currentUser={currentUser}
           onSwitchRole={handleSwitchRole}
-          onOpenLogin={() => setIsAuthScreenOpen(true)}
+          onOpenLogin={handleOpenLogin}
+          onLogout={handleLogout}
         />
 
         {/* Viewer Read-Only Notice Bar */}
@@ -736,10 +873,10 @@ export const AppShell: React.FC = () => {
               </span>
             </div>
             <button
-              onClick={() => handleSwitchRole('director')}
+              onClick={() => handleSwitchRole('owner')}
               className="px-2.5 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 font-semibold text-[11px] border border-purple-500/30 transition-colors"
             >
-              Switch to Director (Active)
+              Switch to Owner (Full Access)
             </button>
           </div>
         )}
@@ -770,7 +907,7 @@ export const AppShell: React.FC = () => {
       <GlobalSearchModal
         isOpen={searchOpen}
         onClose={() => setSearchOpen(false)}
-        onNavigate={setActiveView}
+        onNavigate={handleNavigate}
         onOpenAskAI={initialPrompt => {
           setSearchOpen(false);
           setCommandOpen(true);
@@ -782,7 +919,7 @@ export const AppShell: React.FC = () => {
       <CommandCenter
         isOpen={commandOpen}
         onClose={() => setCommandOpen(false)}
-        onNavigate={setActiveView}
+        onNavigate={handleNavigate}
         brandName={brandProfile.name}
         onStateSynced={state => {
           applyServerState(state);
@@ -830,7 +967,7 @@ export const AppShell: React.FC = () => {
             <LoginView
               currentRole={currentUser.role}
               onLogin={handleLogin}
-              onCancel={() => setIsAuthScreenOpen(false)}
+              onCancel={handleCloseLogin}
             />
           </motion.div>
         )}

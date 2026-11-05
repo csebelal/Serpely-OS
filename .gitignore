@@ -8,6 +8,6 @@ coverage/
 !.env.example
 !.env.production.example
 backend/data/
-data/
+/data/
 *.sqlite*
 *.db

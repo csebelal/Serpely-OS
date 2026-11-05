@@ -1,6 +1,25 @@
 import { UserRole, AuthUser, RolePermissionConfig } from '../types';
 
-export const ROLE_CONFIGS: Record<UserRole, RolePermissionConfig> = {
+export const DEFAULT_ADMIN_USER: AuthUser = {
+  id: 'usr-admin-01',
+  name: 'Serpely Support',
+  email: 'support@serpely.com',
+  role: 'owner',
+  title: 'Full Access Administrator',
+  initials: 'SS',
+  permissions: {
+    canManageSettings: true,
+    canManageApiKeys: true,
+    canApproveSpends: true,
+    canCreateAssets: true,
+    canPublishLive: true,
+    isReadOnly: false
+  }
+};
+
+export const DEFAULT_ADMIN_PASSWORD = '123454321';
+
+export const BASE_ROLE_CONFIGS: Record<string, RolePermissionConfig> = {
   owner: {
     role: 'owner',
     label: 'Owner',
@@ -15,7 +34,7 @@ export const ROLE_CONFIGS: Record<UserRole, RolePermissionConfig> = {
   },
   director: {
     role: 'director',
-    label: 'Director (Active)',
+    label: 'Director',
     tagline: 'Approvals & ad spend sign-off',
     badgeColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
     canApproveSpend: true,
@@ -51,73 +70,29 @@ export const ROLE_CONFIGS: Record<UserRole, RolePermissionConfig> = {
   }
 };
 
-export const DEMO_USERS: Record<UserRole, AuthUser> = {
-  owner: {
-    id: 'usr-owner-01',
-    name: 'Alex Vance',
-    email: 'owner@serpely.com',
-    role: 'owner',
-    title: 'Workspace Owner & Founder',
-    initials: 'OW',
+export const getAuthUserByRole = (role: UserRole): AuthUser => {
+  if (role === 'owner') return DEFAULT_ADMIN_USER;
+  const roleCfg = BASE_ROLE_CONFIGS[role] || BASE_ROLE_CONFIGS.owner;
+  return {
+    id: `usr-${role}-default`,
+    name: `${roleCfg.label} Admin`,
+    email: `${role}@serpely.com`,
+    role,
+    title: roleCfg.label,
+    initials: role.substring(0, 2).toUpperCase(),
     permissions: {
-      canManageSettings: true,
-      canManageApiKeys: true,
-      canApproveSpends: true,
-      canCreateAssets: true,
-      canPublishLive: true,
-      isReadOnly: false
+      canManageSettings: roleCfg.canManageSettings,
+      canManageApiKeys: roleCfg.canManageApiKeys,
+      canApproveSpends: roleCfg.canApproveSpend,
+      canCreateAssets: roleCfg.canCreateAndDraft,
+      canPublishLive: roleCfg.canPublishLive,
+      isReadOnly: roleCfg.isReadOnly
     }
-  },
-  director: {
-    id: 'usr-director-02',
-    name: 'Belal Hossain',
-    email: 'director@serpely.com',
-    role: 'director',
-    title: 'Marketing Director',
-    initials: 'MD',
-    permissions: {
-      canManageSettings: true,
-      canManageApiKeys: true,
-      canApproveSpends: true,
-      canCreateAssets: true,
-      canPublishLive: true,
-      isReadOnly: false
-    }
-  },
-  editor: {
-    id: 'usr-editor-03',
-    name: 'Sarah Jenkins',
-    email: 'editor@serpely.com',
-    role: 'editor',
-    title: 'Growth & Content Editor',
-    initials: 'ED',
-    permissions: {
-      canManageSettings: false,
-      canManageApiKeys: false,
-      canApproveSpends: false,
-      canCreateAssets: true,
-      canPublishLive: false,
-      isReadOnly: false
-    }
-  },
-  viewer: {
-    id: 'usr-viewer-04',
-    name: 'Marcus Chen',
-    email: 'viewer@serpely.com',
-    role: 'viewer',
-    title: 'Analytics & Compliance Viewer',
-    initials: 'VW',
-    permissions: {
-      canManageSettings: false,
-      canManageApiKeys: false,
-      canApproveSpends: false,
-      canCreateAssets: false,
-      canPublishLive: false,
-      isReadOnly: true
-    }
-  }
+  };
 };
 
-export const getAuthUserByRole = (role: UserRole): AuthUser => {
-  return DEMO_USERS[role] || DEMO_USERS.director;
+export const DEMO_USERS: Record<string, AuthUser> = {
+  owner: DEFAULT_ADMIN_USER
 };
+
+export const ROLE_CONFIGS: Record<string, RolePermissionConfig> = BASE_ROLE_CONFIGS;

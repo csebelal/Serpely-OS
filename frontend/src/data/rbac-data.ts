@@ -1,6 +1,25 @@
 import { UserRole, AuthUser, RolePermissionConfig } from '../types';
 
-export const ROLE_CONFIGS: Record<UserRole, RolePermissionConfig> = {
+export const DEFAULT_ADMIN_USER: AuthUser = {
+  id: 'usr-admin-01',
+  name: 'Serpely Support',
+  email: 'support@serpely.com',
+  role: 'owner',
+  title: 'Full Access Administrator',
+  initials: 'SS',
+  permissions: {
+    canManageSettings: true,
+    canManageApiKeys: true,
+    canApproveSpends: true,
+    canCreateAssets: true,
+    canPublishLive: true,
+    isReadOnly: false
+  }
+};
+
+export const DEFAULT_ADMIN_PASSWORD = '123454321';
+
+export const BASE_ROLE_CONFIGS: Record<string, RolePermissionConfig> = {
   owner: {
     role: 'owner',
     label: 'Owner',
@@ -15,7 +34,7 @@ export const ROLE_CONFIGS: Record<UserRole, RolePermissionConfig> = {
   },
   director: {
     role: 'director',
-    label: 'Director (Active)',
+    label: 'Director',
     tagline: 'Approvals & ad spend sign-off',
     badgeColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
     canApproveSpend: true,
@@ -51,73 +70,151 @@ export const ROLE_CONFIGS: Record<UserRole, RolePermissionConfig> = {
   }
 };
 
-export const DEMO_USERS: Record<UserRole, AuthUser> = {
-  owner: {
-    id: 'usr-owner-01',
-    name: 'Alex Vance',
-    email: 'owner@serpely.com',
-    role: 'owner',
-    title: 'Workspace Owner & Founder',
-    initials: 'OW',
-    permissions: {
-      canManageSettings: true,
-      canManageApiKeys: true,
-      canApproveSpends: true,
-      canCreateAssets: true,
-      canPublishLive: true,
-      isReadOnly: false
+export interface RegisteredUserRecord extends AuthUser {
+  password?: string;
+  isCustom?: boolean;
+}
+
+export const getStoredRoles = (): Record<string, RolePermissionConfig> => {
+  try {
+    const raw = localStorage.getItem('serpely_custom_roles');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { ...BASE_ROLE_CONFIGS, ...parsed };
     }
-  },
-  director: {
-    id: 'usr-director-02',
-    name: 'Belal Hossain',
-    email: 'director@serpely.com',
-    role: 'director',
-    title: 'Marketing Director',
-    initials: 'MD',
-    permissions: {
-      canManageSettings: true,
-      canManageApiKeys: true,
-      canApproveSpends: true,
-      canCreateAssets: true,
-      canPublishLive: true,
-      isReadOnly: false
+  } catch {}
+  return { ...BASE_ROLE_CONFIGS };
+};
+
+export const getStoredUsers = (): RegisteredUserRecord[] => {
+  try {
+    const raw = localStorage.getItem('serpely_registered_users');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const hasAdmin = parsed.some(
+          u => u.email && u.email.toLowerCase() === DEFAULT_ADMIN_USER.email.toLowerCase()
+        );
+        if (!hasAdmin) {
+          return [{ ...DEFAULT_ADMIN_USER, password: DEFAULT_ADMIN_PASSWORD }, ...parsed];
+        }
+        return parsed;
+      }
     }
-  },
-  editor: {
-    id: 'usr-editor-03',
-    name: 'Sarah Jenkins',
-    email: 'editor@serpely.com',
-    role: 'editor',
-    title: 'Growth & Content Editor',
-    initials: 'ED',
-    permissions: {
-      canManageSettings: false,
-      canManageApiKeys: false,
-      canApproveSpends: false,
-      canCreateAssets: true,
-      canPublishLive: false,
-      isReadOnly: false
+  } catch {}
+  return [{ ...DEFAULT_ADMIN_USER, password: DEFAULT_ADMIN_PASSWORD }];
+};
+
+export const saveCustomRole = (config: RolePermissionConfig) => {
+  try {
+    const current = getStoredRoles();
+    current[config.role] = config;
+    localStorage.setItem('serpely_custom_roles', JSON.stringify(current));
+    window.dispatchEvent(new CustomEvent('serpely_roles_updated', { detail: current }));
+  } catch {}
+};
+
+export const deleteCustomRole = (roleKey: string) => {
+  try {
+    const current = getStoredRoles();
+    if (BASE_ROLE_CONFIGS[roleKey]) {
+      // Cannot delete base roles
+      return;
     }
-  },
-  viewer: {
-    id: 'usr-viewer-04',
-    name: 'Marcus Chen',
-    email: 'viewer@serpely.com',
-    role: 'viewer',
-    title: 'Analytics & Compliance Viewer',
-    initials: 'VW',
-    permissions: {
-      canManageSettings: false,
-      canManageApiKeys: false,
-      canApproveSpends: false,
-      canCreateAssets: false,
-      canPublishLive: false,
-      isReadOnly: true
+    delete current[roleKey];
+    localStorage.setItem('serpely_custom_roles', JSON.stringify(current));
+    window.dispatchEvent(new CustomEvent('serpely_roles_updated', { detail: current }));
+  } catch {}
+};
+
+export const saveCustomUser = (user: RegisteredUserRecord) => {
+  try {
+    const current = getStoredUsers();
+    const existingIdx = current.findIndex(
+      u => u.email.toLowerCase() === user.email.toLowerCase()
+    );
+    if (existingIdx >= 0) {
+      current[existingIdx] = user;
+    } else {
+      current.push(user);
     }
+    localStorage.setItem('serpely_registered_users', JSON.stringify(current));
+    window.dispatchEvent(new CustomEvent('serpely_users_updated', { detail: current }));
+  } catch {}
+};
+
+export const authenticateCredentials = (
+  email: string,
+  pass: string
+): { success: boolean; user?: AuthUser; error?: string } => {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanPass = (pass || '').trim();
+
+  if (!cleanEmail) {
+    return { success: false, error: 'Email address is required.' };
   }
+  if (!cleanPass) {
+    return { success: false, error: 'Password is required.' };
+  }
+
+  // Check default admin
+  if (
+    cleanEmail === DEFAULT_ADMIN_USER.email.toLowerCase() &&
+    cleanPass === DEFAULT_ADMIN_PASSWORD
+  ) {
+    return { success: true, user: DEFAULT_ADMIN_USER };
+  }
+
+  // Check custom registered users
+  const users = getStoredUsers();
+  const matched = users.find(u => u.email.toLowerCase() === cleanEmail);
+  if (matched) {
+    if (!matched.password || matched.password === cleanPass) {
+      const { password, ...safeUser } = matched;
+      return { success: true, user: safeUser };
+    }
+    return { success: false, error: 'Invalid password. Please check your credentials.' };
+  }
+
+  return {
+    success: false,
+    error: 'No account found with this email. Use support@serpely.com or create a new role/user.'
+  };
 };
 
 export const getAuthUserByRole = (role: UserRole): AuthUser => {
-  return DEMO_USERS[role] || DEMO_USERS.director;
+  if (role === 'owner') return DEFAULT_ADMIN_USER;
+
+  const users = getStoredUsers();
+  const matched = users.find(u => u.role === role);
+  if (matched) {
+    const { password, ...safeUser } = matched;
+    return safeUser;
+  }
+
+  const roles = getStoredRoles();
+  const roleCfg = roles[role] || BASE_ROLE_CONFIGS.owner;
+  return {
+    id: `usr-${role}-default`,
+    name: `${roleCfg.label} Admin`,
+    email: `${role}@serpely.com`,
+    role,
+    title: roleCfg.label,
+    initials: role.substring(0, 2).toUpperCase(),
+    permissions: {
+      canManageSettings: roleCfg.canManageSettings,
+      canManageApiKeys: roleCfg.canManageApiKeys,
+      canApproveSpends: roleCfg.canApproveSpend,
+      canCreateAssets: roleCfg.canCreateAndDraft,
+      canPublishLive: roleCfg.canPublishLive,
+      isReadOnly: roleCfg.isReadOnly
+    }
+  };
 };
+
+// Maintained for backward compatibility
+export const DEMO_USERS: Record<string, AuthUser> = {
+  owner: DEFAULT_ADMIN_USER
+};
+
+export const ROLE_CONFIGS: Record<string, RolePermissionConfig> = BASE_ROLE_CONFIGS;

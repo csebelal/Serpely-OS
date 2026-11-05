@@ -831,7 +831,7 @@ export interface ReportItem {
   metricsSnapshot?: Record<string, string | number>;
 }
 
-export type UserRole = 'owner' | 'director' | 'editor' | 'viewer';
+export type UserRole = 'owner' | 'director' | 'editor' | 'viewer' | (string & {});
 
 export interface RolePermissionConfig {
   role: UserRole;
