@@ -211,30 +211,16 @@ function createInitialDb() {
     },
     agents: structuredClone(mockAgents),
     approvals: [] as ApprovalItem[],
-    geoScore: {
-      overallScore: 0,
-      change30Days: 0,
-      lastAuditedUrl: '',
-      lastAuditedAt: 'Not audited yet',
-      aiEngineBreakdown: [
-        { engine: 'ChatGPT / SearchGPT', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
-        { engine: 'Google Gemini', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
-        { engine: 'Perplexity AI', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
-        { engine: 'Claude', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' }
-      ],
-      hallucinationAlerts: [],
-      topRankedEntities: [],
-      technicalFixes: []
-    } as GeoScoreData,
-    campaigns: [] as CampaignItem[],
+    geoScore: structuredClone(mockGeoScore),
+    campaigns: [] as any[],
     contentList: [] as ContentItem[],
-    socialPosts: [] as SocialPost[],
+    socialPosts: [] as any[],
     ads: [],
     emailCampaigns: [] as EmailCampaign[],
-    emailSequences: [] as EmailSequence[],
+    emailSequences: [] as any[],
     leads: [] as LeadItem[],
     communityMessages: [] as CommunityMessage[],
-    automations: [] as AutomationRule[],
+    automations: [] as any[],
     integrations: [
       { id: 'int-gemini', name: 'Google Gemini 2.5 Pro', category: 'ai', status: 'connected', description: 'Core LLM Engine for autonomous marketing orchestration', icon: 'Sparkles', lastSync: 'Active System Engine' },
       { id: 'int-linkedin', name: 'LinkedIn Marketing Platform', category: 'social', status: 'disconnected', description: 'Publish and schedule executive content and company updates', icon: 'Linkedin', lastSync: 'Never' },
@@ -604,12 +590,7 @@ async function startServer() {
     db.geoScore = createInitialDb().geoScore;
   } else {
     if (!Array.isArray(db.geoScore.aiEngineBreakdown) || db.geoScore.aiEngineBreakdown.length === 0) {
-      db.geoScore.aiEngineBreakdown = [
-        { engine: 'ChatGPT / SearchGPT', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
-        { engine: 'Google Gemini', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
-        { engine: 'Perplexity AI', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' },
-        { engine: 'Claude', score: 0, citationShare: 0, citationsLastWeek: 0, trend: 'stable' }
-      ];
+      db.geoScore.aiEngineBreakdown = structuredClone(mockGeoScore.aiEngineBreakdown);
     }
     if (!Array.isArray(db.geoScore.hallucinationAlerts)) db.geoScore.hallucinationAlerts = [];
     if (!Array.isArray(db.geoScore.topRankedEntities)) db.geoScore.topRankedEntities = [];
@@ -3673,15 +3654,16 @@ async function startServer() {
     let redirectUri = resolveRedirectUri(req);
     let userEmail = '';
     let mode = 'personal';
+    let decoded: any = null;
 
     try {
-      const decoded = JSON.parse(
+      decoded = JSON.parse(
         Buffer.from(rawState, 'base64url').toString('utf8')
       );
-      if (decoded.provider) provider = decoded.provider;
-      if (decoded.redirectUri) redirectUri = decoded.redirectUri;
-      if (decoded.userEmail) userEmail = String(decoded.userEmail).trim().toLowerCase();
-      if (decoded.mode) mode = decoded.mode;
+      if (decoded?.provider) provider = decoded.provider;
+      if (decoded?.redirectUri) redirectUri = decoded.redirectUri;
+      if (decoded?.userEmail) userEmail = String(decoded.userEmail).trim().toLowerCase();
+      if (decoded?.mode) mode = decoded.mode;
     } catch {
       if (['LinkedIn', 'Facebook', 'Google', 'HubSpot'].includes(rawState)) {
         provider = rawState;
@@ -3817,7 +3799,7 @@ async function startServer() {
     const googleSession = db.oauthSessions.google;
     const hubspotSession = db.oauthSessions.hubspot;
 
-    const isPersonalApp = Boolean(decoded?.isPersonalApp);
+    const isPersonalApp = Boolean(decoded?.isPersonalApp || mode === 'personal');
     const liClientId = (isPersonalApp && live.linkedinPersonalClientId) ? live.linkedinPersonalClientId : live.linkedinClientId;
     const liClientSecret = (isPersonalApp && live.linkedinPersonalClientSecret) ? live.linkedinPersonalClientSecret : live.linkedinClientSecret;
 
@@ -3862,7 +3844,7 @@ async function startServer() {
             LINKEDIN_ACCESS_TOKEN: tokenData.access_token
           });
 
-          // Update existing Tech Sheba or company page with the new access token
+          // Update existing company or personal pages with the new access token
           for (const page of db.connectedPages) {
             if (page.platform === 'LinkedIn') {
               page.accessToken = tokenData.access_token;
@@ -3871,91 +3853,102 @@ async function startServer() {
             }
           }
 
-          const userInfoRes = await fetch(
-            'https://api.linkedin.com/v2/userinfo',
-            {
-              headers: {
-                Authorization: `Bearer ${tokenData.access_token}`
+          let userInfo: any = {};
+          try {
+            const userInfoRes = await fetch(
+              'https://api.linkedin.com/v2/userinfo',
+              {
+                headers: {
+                  Authorization: `Bearer ${tokenData.access_token}`
+                }
               }
+            );
+            if (userInfoRes.ok) {
+              userInfo = await userInfoRes.json();
+            } else {
+              console.warn('[LinkedIn OAuth] userinfo returned status:', userInfoRes.status);
             }
-          );
-          const userInfo = (await userInfoRes.json()) as any;
+          } catch (uiErr) {
+            console.warn('[LinkedIn OAuth] userinfo fetch error:', uiErr);
+          }
 
-          const sub = userInfo?.sub || 'linkedin-member';
+          const sub = userInfo?.sub || (userInfo?.id ? String(userInfo.id) : `member-${Date.now()}`);
           const displayName =
             userInfo?.name ||
             [userInfo?.given_name, userInfo?.family_name].filter(Boolean).join(' ') ||
-            `${db.brandProfile.name} Official`;
+            (userEmail ? userEmail.split('@')[0] : 'LinkedIn Member');
 
           linkedinSession.userName = displayName;
 
           const scrapedLiPages: any[] = [];
 
-          // Scrape Organization Pages the user administers
-          try {
-            const orgAclRes = await fetch(
-              'https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED',
-              {
-                headers: {
-                  Authorization: `Bearer ${tokenData.access_token}`,
-                  'X-Restli-Protocol-Version': '2.0.0'
-                }
-              }
-            );
-            if (orgAclRes.ok) {
-              const orgAclData = (await orgAclRes.json()) as any;
-              const elements = Array.isArray(orgAclData?.elements) ? orgAclData.elements : [];
-              for (const elem of elements) {
-                const orgUrn = elem.organizationalTarget;
-                if (orgUrn) {
-                  const orgId = orgUrn.split(':').pop();
-                  let orgName = `Organization ${orgId}`;
-                  try {
-                    const orgDetailRes = await fetch(
-                      `https://api.linkedin.com/v2/organizations/${orgId}`,
-                      {
-                        headers: {
-                          Authorization: `Bearer ${tokenData.access_token}`,
-                          'X-Restli-Protocol-Version': '2.0.0'
-                        }
-                      }
-                    );
-                    if (orgDetailRes.ok) {
-                      const orgDetail = (await orgDetailRes.json()) as any;
-                      if (orgDetail?.localizedName) orgName = orgDetail.localizedName;
-                    }
-                  } catch (e) {
-                    // Ignore individual org error
+          // Only scrape Organization Pages if using Company App with Community Management API permissions
+          if (!isPersonalApp) {
+            try {
+              const orgAclRes = await fetch(
+                'https://api.linkedin.com/v2/organizationalEntityAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED',
+                {
+                  headers: {
+                    Authorization: `Bearer ${tokenData.access_token}`,
+                    'X-Restli-Protocol-Version': '2.0.0'
                   }
+                }
+              );
+              if (orgAclRes.ok) {
+                const orgAclData = (await orgAclRes.json()) as any;
+                const elements = Array.isArray(orgAclData?.elements) ? orgAclData.elements : [];
+                for (const elem of elements) {
+                  const orgUrn = elem.organizationalTarget;
+                  if (orgUrn) {
+                    const orgId = orgUrn.split(':').pop();
+                    let orgName = `Organization ${orgId}`;
+                    try {
+                      const orgDetailRes = await fetch(
+                        `https://api.linkedin.com/v2/organizations/${orgId}`,
+                        {
+                          headers: {
+                            Authorization: `Bearer ${tokenData.access_token}`,
+                            'X-Restli-Protocol-Version': '2.0.0'
+                          }
+                        }
+                      );
+                      if (orgDetailRes.ok) {
+                        const orgDetail = (await orgDetailRes.json()) as any;
+                        if (orgDetail?.localizedName) orgName = orgDetail.localizedName;
+                      }
+                    } catch (e) {
+                      // Ignore individual org error
+                    }
 
-                  scrapedLiPages.push({
-                    id: `page-li-org-${orgId}`,
-                    platform: 'LinkedIn' as const,
-                    pageName: `${orgName} (Company Page)`,
-                    pageHandle: `linkedin.com/company/${orgId}`,
-                    externalPageId: orgUrn,
-                    followersCount: 1540,
-                    oauthConnected: true,
-                    ownerEmail: userEmail || undefined,
-                    accountType: 'organization',
-                    scopes: ['w_organization_social', 'r_organization_social'],
-                    lastSyncedAt: 'Live via LinkedIn OAuth 2.0',
-                    accessToken: tokenData.access_token,
-                    category: 'Company Page',
-                    isSelected: false
-                  });
+                    scrapedLiPages.push({
+                      id: `page-li-org-${orgId}`,
+                      platform: 'LinkedIn' as const,
+                      pageName: `${orgName} (Company Page)`,
+                      pageHandle: `linkedin.com/company/${orgId}`,
+                      externalPageId: orgUrn,
+                      followersCount: 1540,
+                      oauthConnected: true,
+                      ownerEmail: userEmail || undefined,
+                      accountType: 'organization',
+                      scopes: ['w_organization_social', 'r_organization_social'],
+                      lastSyncedAt: 'Live via LinkedIn OAuth 2.0',
+                      accessToken: tokenData.access_token,
+                      category: 'Company Page',
+                      isSelected: false
+                    });
+                  }
                 }
               }
+            } catch (orgErr) {
+              console.error('LinkedIn org discovery error:', orgErr);
             }
-          } catch (orgErr) {
-            console.error('LinkedIn org discovery error:', orgErr);
           }
 
-          // Also add Personal Member Profile
+          // Add Personal Member Profile
           const existingLiHandle = db.oauthSessions.linkedin?.pageHandle;
           const liHandleToUse = (existingLiHandle && !existingLiHandle.includes(sub) && existingLiHandle !== `linkedin.com/in/${sub}`)
             ? existingLiHandle
-            : 'linkedin.com/in/';
+            : `linkedin.com/in/${userInfo?.vanity_name || sub}`;
 
           scrapedLiPages.unshift({
             id: `page-li-person-${sub}`,
@@ -3967,7 +3960,7 @@ async function startServer() {
             oauthConnected: true,
             ownerEmail: userEmail || undefined,
             accountType: 'personal',
-            scopes: ['openid', 'profile', 'w_member_social'],
+            scopes: ['openid', 'profile', 'email', 'w_member_social'],
             lastSyncedAt: 'Live via LinkedIn OAuth 2.0',
             accessToken: tokenData.access_token,
             category: 'Personal Profile',
