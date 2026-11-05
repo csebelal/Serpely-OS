@@ -50,12 +50,10 @@ export class ThreadsSchedulingConnector {
 
     if (!token) {
       return {
-        ok: true,
+        ok: false,
         platform: 'Threads',
-        status: 'sandbox_ready',
-        accountHandle: '@techsheba_threads',
-        accountName: 'Tech Sheba Official (Threads)',
-        message: 'Sandbox / Simulated connector active. Add THREADS_ACCESS_TOKEN to enable live Meta Threads publishing.'
+        status: 'missing_credentials',
+        message: 'Threads is disconnected. Connect via Meta Integrations.'
       };
     }
 
@@ -263,12 +261,10 @@ export class BlueskySchedulingConnector {
 
     if (!handle || !password) {
       return {
-        ok: true,
+        ok: false,
         platform: 'Bluesky',
-        status: 'sandbox_ready',
-        accountHandle: handle ? (handle.startsWith('@') ? handle : `@${handle}`) : '@techsheba.bsky.social',
-        accountName: 'Tech Sheba (Bluesky ATProto)',
-        message: 'Sandbox / Simulated ATProto connector active. Add BLUESKY_IDENTIFIER and BLUESKY_APP_PASSWORD for direct federation.'
+        status: 'missing_credentials',
+        message: 'Bluesky is disconnected. Connect via Integrations.'
       };
     }
 
@@ -430,12 +426,10 @@ export class TikTokSchedulingConnector {
 
     if (!token) {
       return {
-        ok: true,
+        ok: false,
         platform: 'TikTok',
-        status: 'sandbox_ready',
-        accountHandle: '@techsheba_tech',
-        accountName: 'Tech Sheba Tech Clips',
-        message: 'Sandbox / Simulated connector active. Add TIKTOK_ACCESS_TOKEN for live direct video distribution.'
+        status: 'missing_credentials',
+        message: 'TikTok is disconnected. Connect via Integrations.'
       };
     }
 
@@ -560,12 +554,10 @@ export class PinterestSchedulingConnector {
 
     if (!token) {
       return {
-        ok: true,
+        ok: false,
         platform: 'Pinterest',
-        status: 'sandbox_ready',
-        accountHandle: '@techsheba_pins',
-        accountName: 'Tech Sheba Visual Playbooks (Pinterest)',
-        message: 'Sandbox / Simulated connector active. Add PINTEREST_ACCESS_TOKEN for live Pinterest Pin publication.'
+        status: 'missing_credentials',
+        message: 'Pinterest is disconnected. Connect via Integrations.'
       };
     }
 

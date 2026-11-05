@@ -34,13 +34,6 @@ import {
   ScheduledSocialPost
 } from '../../types';
 import { AuthUser } from '../../data/rbac-data';
-import {
-  mockYouTubeVideos,
-  mockChannelAccounts,
-  mockConnectedSocialPages,
-  mockPageSocialPosts,
-  mockApprovals
-} from '../../data/mock-data';
 import { EmptyState } from '../common/EmptyState';
 import { ThreadsIcon, BlueskyIcon, TikTokIcon, PinterestIcon } from '../social/SocialPlatformIcons';
 import { YouTubeVideoStudio } from '../social/YouTubeVideoStudio';
@@ -92,17 +85,13 @@ export const SocialView: React.FC<SocialViewProps> = ({
   // 6 platform & media workspaces: Facebook, Instagram, LinkedIn, X, YouTube Studio, Mutation Studio
   const [activeTab, setActiveTab] = useState<SocialTab>('facebook');
 
-  // Fallback local state if not controlled by AppShell
-  const [localConnectedPages, setLocalConnectedPages] = useState<ConnectedSocialPage[]>(
-    mockConnectedSocialPages
-  );
-  const [localPagePosts, setLocalPagePosts] = useState<PageSocialPost[]>(
-    mockPageSocialPosts
-  );
+  // Fallback local state if not controlled by AppShell (Clean slate: starts empty)
+  const [localConnectedPages, setLocalConnectedPages] = useState<ConnectedSocialPage[]>([]);
+  const [localPagePosts, setLocalPagePosts] = useState<PageSocialPost[]>([]);
 
   const connectedPages = propConnectedPages || localConnectedPages;
   const pagePosts = propPagePosts || localPagePosts;
-  const approvals = propApprovals || mockApprovals;
+  const approvals = propApprovals || [];
 
   const updateConnectedPagesList = (pages: ConnectedSocialPage[]) => {
     if (onUpdateConnectedPages) {
@@ -112,9 +101,9 @@ export const SocialView: React.FC<SocialViewProps> = ({
     }
   };
 
-  // YouTube video & channel state
-  const [videos, setVideos] = useState<YouTubeVideoProject[]>(mockYouTubeVideos);
-  const [channels] = useState<SocialChannelAccount[]>(mockChannelAccounts);
+  // YouTube video & channel state (Clean slate: starts empty)
+  const [videos, setVideos] = useState<YouTubeVideoProject[]>([]);
+  const [channels] = useState<SocialChannelAccount[]>([]);
 
   // Notification toast
   const [notification, setNotification] = useState<string | null>(null);

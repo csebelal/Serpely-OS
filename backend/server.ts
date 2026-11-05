@@ -565,90 +565,18 @@ async function startServer() {
     (db as any).messagingConfig = structuredClone(mockMessagingConfig);
   }
 
-  // Ensure default accounts exist if no connected pages are present
-  if (!Array.isArray(db.connectedPages) || db.connectedPages.length === 0) {
-    db.connectedPages = structuredClone(mockConnectedSocialPages);
-  }
-
-  // Ensure that ONLY LinkedIn (and actively verified live accounts) are marked as connected
-  if (Array.isArray(db.connectedPages)) {
-    db.connectedPages = db.connectedPages.map(p => {
-      if (p.platform === 'LinkedIn') {
-        return p;
-      }
-      const isLiveFacebook = p.platform === 'Facebook' && db.oauthSessions?.facebook?.connected && !db.oauthSessions?.facebook?.loggedOut;
-      if (!isLiveFacebook) {
-        return {
-          ...p,
-          oauthConnected: false,
-          lastSyncedAt: 'Not connected',
-          isSelected: false,
-          accessToken: undefined
-        };
-      }
-      return p;
-    });
-  }
-
-  const existingPlatforms = new Set((db.connectedPages || []).map(p => p.platform));
-  const defaultExtraPages: ConnectedSocialPage[] = [
-    {
-      id: 'page-threads-1',
-      platform: 'Threads',
-      pageName: 'Tech Sheba (Official Threads)',
-      pageHandle: '@techsheba_official',
-      externalPageId: 'th_usr_techsheba_991',
-      followersCount: 2840,
-      oauthConnected: false,
-      scopes: ['threads_basic', 'threads_content_publish', 'threads_read_replies'],
-      lastSyncedAt: 'Not connected',
-      isSelected: false,
-      category: 'Meta Threads Creator Profile'
-    },
-    {
-      id: 'page-bluesky-1',
-      platform: 'Bluesky',
-      pageName: 'Tech Sheba (Decentralized Node)',
-      pageHandle: '@techsheba.bsky.social',
-      externalPageId: 'did:plc:techsheba778899atproto',
-      followersCount: 1650,
-      oauthConnected: false,
-      scopes: ['atproto:read', 'atproto:write', 'app.bsky.feed.post'],
-      lastSyncedAt: 'Not connected',
-      isSelected: false,
-      category: 'AT Protocol Federated Profile'
-    },
-    {
-      id: 'page-tiktok-1',
-      platform: 'TikTok',
-      pageName: 'Tech Sheba Tech Clips',
-      pageHandle: '@techsheba_tech',
-      externalPageId: 'tt_creator_techsheba_44',
-      followersCount: 8920,
-      oauthConnected: false,
-      scopes: ['user.info.basic', 'video.publish', 'video.upload'],
-      lastSyncedAt: 'Not connected',
-      isSelected: false,
-      category: 'TikTok Creator Hub'
-    },
-    {
-      id: 'page-pinterest-1',
-      platform: 'Pinterest',
-      pageName: 'Tech Sheba Visual Playbooks',
-      pageHandle: '@techsheba_pins',
-      externalPageId: 'pin_biz_techsheba_108',
-      followersCount: 5410,
-      oauthConnected: false,
-      scopes: ['boards:read', 'pins:read', 'pins:write'],
-      lastSyncedAt: 'Not connected',
-      isSelected: false,
-      category: 'Pinterest Business Verified Hub'
-    }
-  ];
-  for (const extra of defaultExtraPages) {
-    if (!existingPlatforms.has(extra.platform)) {
-      db.connectedPages.push(extra);
-    }
+  // Ensure connectedPages exists as clean array without mock accounts
+  if (!Array.isArray(db.connectedPages)) {
+    db.connectedPages = [];
+  } else {
+    // Purge any legacy mock/demo pages
+    db.connectedPages = db.connectedPages.filter(
+      p => !p.id?.startsWith('page-threads-') &&
+           !p.id?.startsWith('page-bluesky-') &&
+           !p.id?.startsWith('page-tiktok-') &&
+           !p.id?.startsWith('page-pinterest-') &&
+           !p.pageName?.includes('Tech Sheba')
+    );
   }
 
   // Initialize and start Central Scheduling Connector Engine
