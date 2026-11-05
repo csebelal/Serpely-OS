@@ -885,7 +885,18 @@ async function startServer() {
   // ============================================================================
   // 0. Server-Side SQL State Synchronization Endpoints
   // ============================================================================
-  app.get('/api/state', (_req, res) => {
+  app.get('/api/state', (req, res) => {
+    const userEmail = (req.query.userEmail as string || '').trim().toLowerCase();
+    if (userEmail && Array.isArray(db.connectedPages)) {
+      const filteredPages = db.connectedPages.filter(p => {
+        // If it's a personal account with an owner, only show if owner matches current user
+        if (p.accountType === 'personal' && p.ownerEmail) {
+          return p.ownerEmail.toLowerCase() === userEmail;
+        }
+        return true;
+      });
+      return res.json({ ...db, connectedPages: filteredPages });
+    }
     res.json(db);
   });
 
@@ -3235,11 +3246,23 @@ async function startServer() {
         message: 'LinkedIn Client ID not configured yet. Enter your LinkedIn App Client ID & Secret in the Credential Modal.'
       });
     }
+
+    const mode = (req.query.mode as string) || 'personal'; // 'personal' or 'company'
+    const userEmail = ((req.query.userEmail as string) || '').trim().toLowerCase();
+
+    // Personal Member Profile requires OpenID Connect (openid, profile, email) + Share on LinkedIn (w_member_social)
+    // Company/Organization Page requires Organization Social permissions
+    let scope = 'openid profile email w_member_social';
+    if (mode === 'company') {
+      scope = 'w_organization_social r_organization_social openid profile email';
+    } else if (process.env.LINKEDIN_SCOPES && !process.env.LINKEDIN_SCOPES.includes('w_organization_social')) {
+      scope = process.env.LINKEDIN_SCOPES;
+    }
+
     const statePayload = Buffer.from(
-      JSON.stringify({ provider: 'LinkedIn', redirectUri })
+      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail })
     ).toString('base64url');
-    const scope =
-      process.env.LINKEDIN_SCOPES || 'w_organization_social r_organization_social';
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
@@ -3250,6 +3273,8 @@ async function startServer() {
     res.json({
       url: `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`,
       redirectUri,
+      mode,
+      scope,
       sandboxMode: false
     });
   });
@@ -3261,11 +3286,17 @@ async function startServer() {
     if (!clientId) {
       return res.redirect('/#settings');
     }
+
+    const mode = (req.query.mode as string) || 'personal';
+    const userEmail = ((req.query.userEmail as string) || '').trim().toLowerCase();
+    const scope = mode === 'company'
+      ? 'w_organization_social r_organization_social openid profile email'
+      : 'openid profile email w_member_social';
+
     const statePayload = Buffer.from(
-      JSON.stringify({ provider: 'LinkedIn', redirectUri })
+      JSON.stringify({ provider: 'LinkedIn', redirectUri, mode, userEmail })
     ).toString('base64url');
-    const scope =
-      process.env.LINKEDIN_SCOPES || 'w_organization_social r_organization_social';
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
@@ -3659,6 +3690,8 @@ async function startServer() {
     const rawState = (req.query.state as string) || '';
     let provider = 'LinkedIn';
     let redirectUri = resolveRedirectUri(req);
+    let userEmail = '';
+    let mode = 'personal';
 
     try {
       const decoded = JSON.parse(
@@ -3666,6 +3699,8 @@ async function startServer() {
       );
       if (decoded.provider) provider = decoded.provider;
       if (decoded.redirectUri) redirectUri = decoded.redirectUri;
+      if (decoded.userEmail) userEmail = String(decoded.userEmail).trim().toLowerCase();
+      if (decoded.mode) mode = decoded.mode;
     } catch {
       if (['LinkedIn', 'Facebook', 'Google', 'HubSpot'].includes(rawState)) {
         provider = rawState;
@@ -3793,6 +3828,8 @@ async function startServer() {
                     externalPageId: orgUrn,
                     followersCount: 1540,
                     oauthConnected: true,
+                    ownerEmail: userEmail || undefined,
+                    accountType: 'organization',
                     scopes: ['w_organization_social', 'r_organization_social'],
                     lastSyncedAt: 'Live via LinkedIn OAuth 2.0',
                     accessToken: tokenData.access_token,
@@ -3820,6 +3857,8 @@ async function startServer() {
             externalPageId: `urn:li:person:${sub}`,
             followersCount: 500,
             oauthConnected: true,
+            ownerEmail: userEmail || undefined,
+            accountType: 'personal',
             scopes: ['openid', 'profile', 'w_member_social'],
             lastSyncedAt: 'Live via LinkedIn OAuth 2.0',
             accessToken: tokenData.access_token,
@@ -3839,8 +3878,19 @@ async function startServer() {
           linkedinSession.pageHandle = activeLi.pageHandle;
           linkedinSession.followersCount = activeLi.followersCount;
 
+          // Merge with existing connectedPages, preserving other users' personal accounts
+          const otherPages = (db.connectedPages || []).filter((p) => {
+            if (p.platform !== 'LinkedIn') return true;
+            // Preserve other users' personal accounts
+            if (p.accountType === 'personal' && p.ownerEmail && userEmail && p.ownerEmail.toLowerCase() !== userEmail.toLowerCase()) {
+              return true;
+            }
+            // If it's a page not in the current scraped list, keep it
+            return !scrapedLiPages.some(sp => sp.externalPageId === p.externalPageId);
+          });
+
           db.connectedPages = [
-            ...db.connectedPages.filter((p) => p.platform !== 'LinkedIn'),
+            ...otherPages,
             ...scrapedLiPages
           ];
 

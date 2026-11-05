@@ -210,9 +210,13 @@ export const LinkedInFacebookAutomationStudio: React.FC<LinkedInFacebookAutomati
 
   // Connect or Toggle OAuth Page Status
   const handleConnectOAuthPage = async (page: ConnectedSocialPage) => {
+    const mode = page.category === 'Company Page' || page.accountType === 'organization' ? 'company' : 'personal';
     const baseEndpoint =
-      page.platform === 'LinkedIn' ? '/api/auth/linkedin/url' : '/api/auth/facebook/url';
-    const endpoint = `${baseEndpoint}?origin=${encodeURIComponent(window.location.origin)}`;
+      page.platform === 'LinkedIn'
+        ? `/api/auth/linkedin/url?mode=${mode}`
+        : '/api/auth/facebook/url';
+    const sep = baseEndpoint.includes('?') ? '&' : '?';
+    const endpoint = `${baseEndpoint}${sep}origin=${encodeURIComponent(window.location.origin)}`;
     try {
       const res = await fetch(endpoint);
       if (res.ok) {

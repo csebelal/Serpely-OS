@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { mockIntegrations } from '../../data/mock-data';
 import { IntegrationItem, ViewId, ConnectedSocialPage } from '../../types';
+import { AuthUser } from '../../data/rbac-data';
 import { loginWithFacebookSdk, exchangeFacebookToken } from '../../services/facebook-sdk';
 import { McpServerStudio } from '../integrations/McpServerStudio';
 import { WebhookHubStudio } from '../integrations/WebhookHubStudio';
@@ -35,6 +36,7 @@ interface IntegrationsViewProps {
   onUpdateIntegrations?: (integrations: IntegrationItem[]) => void;
   onStateSynced?: (state: any) => void;
   onNavigate?: (view: ViewId) => void;
+  currentUser?: AuthUser;
 }
 
 type ProviderKey = 'facebook' | 'linkedin' | 'google' | 'hubspot' | 'smtp' | 'gemini' | 'elevenlabs' | 'heygen' | 'threads' | 'bluesky' | 'tiktok';
@@ -142,7 +144,8 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   integrationsList = mockIntegrations,
   onUpdateIntegrations,
   onStateSynced,
-  onNavigate
+  onNavigate,
+  currentUser
 }) => {
   const [integrations, setIntegrations] = useState<IntegrationItem[]>(integrationsList);
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
@@ -311,17 +314,22 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
   };
 
   // Launch OAuth 2.0 Popup for a Provider (with Hybrid JS SDK for Facebook)
-  const handleLaunchOAuthPopup = async (provider: 'facebook' | 'linkedin' | 'google' | 'hubspot') => {
+  const handleLaunchOAuthPopup = async (
+    provider: 'facebook' | 'linkedin' | 'google' | 'hubspot',
+    mode: 'personal' | 'company' = 'personal'
+  ) => {
+    const userEmail = currentUser?.email || '';
     const endpointMap: Record<typeof provider, string> = {
       facebook: '/api/auth/facebook/url',
-      linkedin: '/api/auth/linkedin/url',
+      linkedin: `/api/auth/linkedin/url?mode=${mode}&userEmail=${encodeURIComponent(userEmail)}`,
       google: '/api/auth/google/url',
       hubspot: '/api/auth/hubspot/url'
     };
 
     try {
+      const sep = endpointMap[provider].includes('?') ? '&' : '?';
       const res = await fetch(
-        `${endpointMap[provider]}?origin=${encodeURIComponent(window.location.origin)}`
+        `${endpointMap[provider]}${sep}origin=${encodeURIComponent(window.location.origin)}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -1009,40 +1017,47 @@ export const IntegrationsView: React.FC<IntegrationsViewProps> = ({
             </div>
 
             <div className="space-y-2 pt-2 border-t border-neutral-800/80">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleLaunchOAuthPopup('linkedin', 'personal')}
+                  className="py-2 px-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                  title="Connect your personal LinkedIn profile (w_member_social)"
+                >
+                  <Share2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Personal Profile</span>
+                </button>
+                <button
+                  onClick={() => handleLaunchOAuthPopup('linkedin', 'company')}
+                  className="py-2 px-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-sky-300 border border-neutral-700/80 hover:border-sky-500/50 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                  title="Connect LinkedIn Company / Organization Page"
+                >
+                  <Share2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Company Page</span>
+                </button>
+              </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleLaunchOAuthPopup('linkedin')}
-                  className="flex-1 py-2 px-3 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  onClick={() => handleVerifyLive('linkedin', 'LinkedIn API v2')}
+                  disabled={verifyingProvider === 'linkedin'}
+                  className="flex-1 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <Share2 className="h-3.5 w-3.5" />
-                  <span>
-                    {liveStatus?.linkedin?.mode === 'live'
-                      ? 'Re-Authenticate LinkedIn OAuth'
-                      : 'Login with LinkedIn'}
-                  </span>
+                  <RefreshCw
+                    className={`h-3 w-3 text-emerald-400 ${
+                      verifyingProvider === 'linkedin' ? 'animate-spin' : ''
+                    }`}
+                  />
+                  <span>Verify Live Connection</span>
                 </button>
                 <button
                   onClick={() => {
                     setActiveModalProvider('linkedin');
                   }}
-                  className="py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold transition-colors"
+                  className="py-1.5 px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 text-xs font-semibold transition-colors cursor-pointer"
                   title="Configure LinkedIn Client ID & Secret"
                 >
                   <KeyRound className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <button
-                onClick={() => handleVerifyLive('linkedin', 'LinkedIn API v2')}
-                disabled={verifyingProvider === 'linkedin'}
-                className="w-full py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <RefreshCw
-                  className={`h-3 w-3 text-emerald-400 ${
-                    verifyingProvider === 'linkedin' ? 'animate-spin' : ''
-                  }`}
-                />
-                <span>Verify Live LinkedIn v2 Connection</span>
-              </button>
             </div>
           </div>
 

@@ -760,6 +760,8 @@ export interface ConnectedSocialPage {
   accessToken?: string;
   category?: string;
   pictureUrl?: string;
+  ownerEmail?: string;
+  accountType?: 'personal' | 'organization';
 }
 
 export interface PageSocialPost {

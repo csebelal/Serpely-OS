@@ -331,7 +331,8 @@ export const AppShell: React.FC = () => {
 
   // Load persistent state from server on mount
   useEffect(() => {
-    fetch('/api/state')
+    const userParam = currentUser?.email ? `?userEmail=${encodeURIComponent(currentUser.email)}` : '';
+    fetch(`/api/state${userParam}`)
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
         if (data) applyServerState(data);
@@ -342,7 +343,7 @@ export const AppShell: React.FC = () => {
       .finally(() => {
         setIsHydrating(false);
       });
-  }, []);
+  }, [currentUser?.email]);
 
   const persistPartialState = async (partial: Record<string, unknown>) => {
     try {
@@ -597,6 +598,7 @@ export const AppShell: React.FC = () => {
             socialPosts={socialPosts}
             approvals={approvals}
             brandProfile={brandProfile}
+            currentUser={currentUser}
             onUpdateConnectedPages={nextPages => {
               setConnectedPages(nextPages);
               persistPartialState({ connectedPages: nextPages });
@@ -762,6 +764,7 @@ export const AppShell: React.FC = () => {
             }}
             onStateSynced={applyServerState}
             onNavigate={handleNavigate}
+            currentUser={currentUser}
           />
         );
       case 'settings':

@@ -33,6 +33,7 @@ import {
   SocialPagePlatform,
   ScheduledSocialPost
 } from '../../types';
+import { AuthUser } from '../../data/rbac-data';
 import {
   mockYouTubeVideos,
   mockChannelAccounts,
@@ -60,6 +61,7 @@ interface SocialViewProps {
   onUpdateSocialPosts?: (posts: any[]) => void;
   onApproveItem?: (approvalId: string) => void;
   brandProfile?: BrandProfile;
+  currentUser?: AuthUser;
 }
 
 type SocialTab =
@@ -84,7 +86,8 @@ export const SocialView: React.FC<SocialViewProps> = ({
   onUpdateConnectedPages,
   onUpdatePagePosts,
   onApproveItem,
-  brandProfile
+  brandProfile,
+  currentUser
 }) => {
   // 6 platform & media workspaces: Facebook, Instagram, LinkedIn, X, YouTube Studio, Mutation Studio
   const [activeTab, setActiveTab] = useState<SocialTab>('facebook');
@@ -116,11 +119,81 @@ export const SocialView: React.FC<SocialViewProps> = ({
   // Notification toast
   const [notification, setNotification] = useState<string | null>(null);
   const [showOmnipostModal, setShowOmnipostModal] = useState<boolean>(false);
+  const [connectingLinkedIn, setConnectingLinkedIn] = useState<boolean>(false);
 
   const showNotification = (msg: string) => {
     setNotification(msg);
-    setTimeout(() => setNotification(null), 3500);
+    setTimeout(() => setNotification(null), 4000);
   };
+
+  // Check if current user has connected their personal LinkedIn account
+  const hasPersonalLinkedIn = connectedPages.some(
+    p => p.platform === 'LinkedIn' && p.oauthConnected && p.accountType === 'personal'
+  );
+  const personalLinkedInAccount = connectedPages.find(
+    p => p.platform === 'LinkedIn' && p.oauthConnected && p.accountType === 'personal'
+  );
+
+  // 1-Click Connect Personal LinkedIn OAuth flow
+  const handleConnectPersonalLinkedIn = async () => {
+    setConnectingLinkedIn(true);
+    try {
+      const userEmail = currentUser?.email || '';
+      const endpoint = `/api/auth/linkedin/url?mode=personal&userEmail=${encodeURIComponent(userEmail)}&origin=${encodeURIComponent(window.location.origin)}`;
+      const res = await fetch(endpoint);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url && !data.sandboxMode) {
+          const popup = window.open(data.url, 'linkedin_oauth_popup', 'width=620,height=720');
+          if (popup) {
+            showNotification('Opened LinkedIn OAuth 2.0 window. Please authorize Sincly in the popup...');
+            return;
+          } else {
+            alert('Popup was blocked by your browser. Please allow popups for this site and click again.');
+          }
+        } else if (data.requiresCredentials) {
+          if (onNavigate) onNavigate('integrations');
+        }
+      }
+    } catch (err: any) {
+      showNotification(`LinkedIn connection error: ${err.message || 'Check connection'}`);
+    } finally {
+      setConnectingLinkedIn(false);
+    }
+  };
+
+  // Listen for OAuth 2.0 popup completion
+  useEffect(() => {
+    const handleAuthData = (data: any) => {
+      if (data?.type === 'OAUTH_AUTH_SUCCESS' && data.provider === 'LinkedIn') {
+        showNotification(`🎉 Connected LinkedIn: ${data.pageName || 'Personal Profile'}!`);
+        fetch(`/api/state?userEmail=${encodeURIComponent(currentUser?.email || '')}`)
+          .then(r => (r.ok ? r.json() : null))
+          .then(state => {
+            if (state?.connectedPages && onUpdateConnectedPages) {
+              onUpdateConnectedPages(state.connectedPages);
+            }
+          })
+          .catch(() => {});
+      }
+    };
+
+    const handleMessage = (e: MessageEvent) => handleAuthData(e.data);
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'serpely_oauth_event' && e.newValue) {
+        try {
+          handleAuthData(JSON.parse(e.newValue));
+        } catch {}
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [currentUser?.email, onUpdateConnectedPages]);
 
   // Handle batch publication from Omnipost composer modal
   const handleBatchPublish = (batchPosts: PageSocialPost[], mode: 'publish_now' | 'queue' | 'approval') => {
@@ -283,6 +356,30 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
         {/* Quick Header Actions */}
         <div className="flex items-center flex-wrap gap-2.5">
+          {/* Connect Personal LinkedIn 1-Click Button */}
+          <button
+            onClick={handleConnectPersonalLinkedIn}
+            disabled={connectingLinkedIn}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 active:scale-95 cursor-pointer border ${
+              hasPersonalLinkedIn
+                ? 'bg-[#0a66c2]/15 hover:bg-[#0a66c2]/25 text-[#70b5f9] border-[#0a66c2]/40 shadow-sm'
+                : 'bg-[#0a66c2] hover:bg-[#004182] text-white border-transparent shadow-md shadow-[#0a66c2]/25'
+            }`}
+            title="Connect your personal LinkedIn profile via secure 1-click OAuth"
+          >
+            <Linkedin className="h-4 w-4 shrink-0" />
+            <span>
+              {connectingLinkedIn
+                ? 'Connecting...'
+                : hasPersonalLinkedIn
+                ? `Personal: ${personalLinkedInAccount?.pageName?.replace(' (Personal Profile)', '') || 'Connected'}`
+                : 'Connect Personal LinkedIn'}
+            </span>
+            {hasPersonalLinkedIn && (
+              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            )}
+          </button>
+
           {/* Master Unified Omnipost Button (Postiz-Style Multi-Platform Broadcast) */}
           <button
             onClick={() => setShowOmnipostModal(true)}
@@ -318,6 +415,36 @@ export const SocialView: React.FC<SocialViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* 1-Click Personal LinkedIn Welcome Banner for logged in users */}
+      {!hasPersonalLinkedIn && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0a66c2]/15 via-blue-950/20 to-neutral-900 border border-[#0a66c2]/35 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="h-10 w-10 rounded-xl bg-[#0a66c2] text-white flex items-center justify-center font-bold shrink-0 shadow-md shadow-[#0a66c2]/30">
+              <Linkedin className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                <span>Connect your Personal LinkedIn Profile</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold font-mono">
+                  1-Click Live OAuth
+                </span>
+              </h4>
+              <p className="text-[11px] text-neutral-400 mt-0.5">
+                Publish autonomous executive carousels, thought-leadership posts, and sync comment telemetry directly to your personal LinkedIn feed.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleConnectPersonalLinkedIn}
+            disabled={connectingLinkedIn}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0a66c2] hover:bg-[#004182] text-white text-xs font-bold shadow-md shadow-[#0a66c2]/30 transition-all shrink-0 active:scale-95 cursor-pointer disabled:opacity-50"
+          >
+            <Linkedin className="h-3.5 w-3.5" />
+            <span>{connectingLinkedIn ? 'Opening...' : 'Connect Now'}</span>
+          </button>
+        </div>
+      )}
 
       {notification && (
         <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center justify-between">
