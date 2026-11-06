@@ -15,6 +15,7 @@ import {
   saveCustomUser,
   RegisteredUserRecord
 } from '../../data/rbac-data';
+import { apiClient, setStoredAuthToken } from '../../services/apiClient';
 
 interface LoginViewProps {
   currentRole?: UserRole;
@@ -78,28 +79,22 @@ export const LoginView: React.FC<LoginViewProps> = ({
       }
 
       try {
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: name.trim() || cleanEmail.split('@')[0],
-            email: cleanEmail,
-            password: cleanPassword,
-            role: 'owner'
-          })
+        const res = await apiClient.post('/api/auth/register', {
+          name: name.trim() || cleanEmail.split('@')[0],
+          email: cleanEmail,
+          password: cleanPassword,
+          role: 'owner'
         });
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          setErrorMessage(data.error || 'Registration failed. Please try again.');
+
+        if (!res.success || !res.data?.success) {
+          setErrorMessage(res.error || res.data?.error || 'Registration failed. Please try again.');
           setIsSubmitting(false);
           return;
         }
 
-        const registeredUser = data.user;
-        if (data.token) {
-          try {
-            localStorage.setItem('serpely_auth_token', data.token);
-          } catch {}
+        const registeredUser = res.data.user;
+        if (res.data.token) {
+          setStoredAuthToken(res.data.token);
         }
         try {
           localStorage.setItem('serpely_authenticated_user', JSON.stringify(registeredUser));
@@ -116,17 +111,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
     } else {
       // --- SIGN IN LOGIC (POST /api/auth/login) ---
       try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            password: cleanPassword
-          })
+        const res = await apiClient.post('/api/auth/login', {
+          email: cleanEmail,
+          password: cleanPassword
         });
-        const data = await res.json();
 
-        if (!res.ok || !data.success) {
+        if (!res.success || !res.data?.success) {
           // Fallback to local offline credentials if network/backend is unreachable
           const fallback = authenticateCredentials(cleanEmail, cleanPassword);
           if (fallback.success && fallback.user) {
@@ -139,16 +129,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
             onLogin(fallback.user);
             return;
           }
-          setErrorMessage(data.error || 'Invalid credentials. Please verify your email and password.');
+          setErrorMessage(res.error || res.data?.error || 'Invalid credentials. Please verify your email and password.');
           setIsSubmitting(false);
           return;
         }
 
-        const authenticatedUser = data.user;
-        if (data.token) {
-          try {
-            localStorage.setItem('serpely_auth_token', data.token);
-          } catch {}
+        const authenticatedUser = res.data.user;
+        if (res.data.token) {
+          setStoredAuthToken(res.data.token);
         }
         try {
           localStorage.setItem('serpely_authenticated_user', JSON.stringify(authenticatedUser));

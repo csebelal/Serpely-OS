@@ -31,6 +31,7 @@ import {
   DEFAULT_ADMIN_USER
 } from '../../data/rbac-data';
 import { LoginView } from '../auth/LoginView';
+import { apiClient } from '../../services/apiClient';
 import {
   mockBrandProfile,
   mockAgents,
@@ -271,8 +272,20 @@ export const AppShell: React.FC = () => {
       setIsAuthScreenOpen(route.isLogin);
     };
 
+    const handleUnauthorized = () => {
+      setIsAuthScreenOpen(true);
+      if (window.location.pathname !== '/login') {
+        window.history.pushState({ isLogin: true }, '', '/login');
+      }
+      showToast('Session expired or unauthorized. Please sign in again.');
+    };
+
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
   }, []);
 
   const handleSwitchRole = (newRole: UserRole) => {
@@ -351,27 +364,30 @@ export const AppShell: React.FC = () => {
 
   // Load persistent state from server on mount
   useEffect(() => {
-    const userParam = currentUser?.email ? `?userEmail=${encodeURIComponent(currentUser.email)}` : '';
-    fetch(`/api/state${userParam}`)
-      .then(res => (res.ok ? res.json() : null))
-      .then(data => {
-        if (data) applyServerState(data);
+    let isMounted = true;
+    const params = currentUser?.email ? { userEmail: currentUser.email } : undefined;
+
+    apiClient.get('/api/state', { params })
+      .then(res => {
+        if (isMounted && res.success && res.data) {
+          applyServerState(res.data);
+        }
       })
       .catch(() => {
-        // Fallback to local state if offline
+        // Fallback to local state if offline or network error
       })
       .finally(() => {
-        setIsHydrating(false);
+        if (isMounted) setIsHydrating(false);
       });
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentUser?.email]);
 
   const persistPartialState = async (partial: Record<string, unknown>) => {
     try {
-      await fetch('/api/state', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(partial)
-      });
+      await apiClient.put('/api/state', partial);
     } catch {
       // ignore network error
     }

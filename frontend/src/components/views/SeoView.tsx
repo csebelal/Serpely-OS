@@ -7,8 +7,8 @@ import {
   Globe,
   Code2
 } from 'lucide-react';
-import { mockGeoScore } from '../../data/mock-data';
 import { GeoScoreData } from '../../types';
+import { apiClient } from '../../services/apiClient';
 
 interface SeoViewProps {
   geoScore?: GeoScoreData;
@@ -38,7 +38,7 @@ const normalizeGeoScore = (raw?: GeoScoreData): GeoScoreData => {
 };
 
 export const SeoView: React.FC<SeoViewProps> = ({
-  geoScore = mockGeoScore,
+  geoScore,
   onUpdateGeoScore,
   brandName = 'Brand',
   brandWebsite = 'https://brand.com'
@@ -71,18 +71,16 @@ export const SeoView: React.FC<SeoViewProps> = ({
     setIsAuditing(true);
     setAuditNotice(null);
     try {
-      const res = await fetch('/api/seo/audit-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: targetUrl })
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const res = await apiClient.post('/api/seo/audit-url', { url: targetUrl });
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.crawledMeta) setCrawledMeta(data.crawledMeta);
         if (data.geoScore) {
           updateGeo(data.geoScore);
         }
         setAuditNotice(`Audit complete for ${targetUrl}.`);
+      } else {
+        setAuditNotice(res.error || 'Audit completed with warnings.');
       }
     } catch {
       const next: GeoScoreData = {

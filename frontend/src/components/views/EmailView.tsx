@@ -51,6 +51,7 @@ import {
 } from '../../types';
 import { mockBrandProfile } from '../../data/mock-data';
 import { VisualSequenceBuilder } from '../email/VisualSequenceBuilder';
+import { apiClient } from '../../services/apiClient';
 
 interface EmailViewProps {
   onOpenCommand: () => void;
@@ -169,9 +170,9 @@ export const EmailView: React.FC<EmailViewProps> = ({
 
   // Load default SMTP settings from backend .env on mount
   useEffect(() => {
-    fetch('/api/email/smtp-defaults')
-      .then((r) => r.json())
-      .then((data) => {
+    apiClient.get('/api/email/smtp-defaults')
+      .then((res) => {
+        const data = res.data;
         if (data && data.host) {
           setSmtpConfig((prev) => ({
             ...prev,
@@ -330,18 +331,14 @@ export const EmailView: React.FC<EmailViewProps> = ({
     if (!aiPromptTopic.trim()) return;
     setAiGenerating(true);
     try {
-      const res = await fetch('/api/email/ai-generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appName: activeApp?.name || effectiveBrandName,
-          category: aiCategory,
-          themeMode: aiThemeMode,
-          promptTopic: aiPromptTopic,
-          accentColor: activeApp?.accentColor || '#17c964'
-        })
+      const res = await apiClient.post('/api/email/ai-generate', {
+        appName: activeApp?.name || effectiveBrandName,
+        category: aiCategory,
+        themeMode: aiThemeMode,
+        promptTopic: aiPromptTopic,
+        accentColor: activeApp?.accentColor || '#17c964'
       });
-      const data = await res.json();
+      const data = res.data;
       if (data?.template) {
         const createdTpl: EmailTemplate = {
           id: `tpl-ai-${Date.now()}`,
@@ -505,13 +502,9 @@ export const EmailView: React.FC<EmailViewProps> = ({
     setSmtpVerifying(true);
     setSmtpStatusMsg(null);
     try {
-      const res = await fetch('/api/email/smtp-verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ smtp: smtpConfig })
-      });
-      const data = await res.json();
-      if (data.success) {
+      const res = await apiClient.post('/api/email/smtp-verify', { smtp: smtpConfig });
+      const data = res.data;
+      if (res.success && data?.success) {
         setSmtpConfig((prev) => ({
           ...prev,
           verified: !data.simulated,
@@ -525,7 +518,7 @@ export const EmailView: React.FC<EmailViewProps> = ({
       } else {
         setSmtpStatusMsg({
           type: 'error',
-          text: data.message || 'SMTP connection verification failed.'
+          text: data?.message || res.error || 'SMTP connection verification failed.'
         });
       }
     } catch {
@@ -543,43 +536,39 @@ export const EmailView: React.FC<EmailViewProps> = ({
     const chosenTpl = tpl || templates.find((t) => t.id === selectedTemplateId) || templates[0];
     setSendingTestEmail(true);
     try {
-      const res = await fetch('/api/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          smtp: smtpConfig,
-          appName: activeApp.name,
-          subject: `[TEST] ${chosenTpl.subjectLine}`,
-          text: chosenTpl.bodyContent,
-          html:
-            chosenTpl.htmlCode ||
-            buildResponsiveEmailHtml({
-              appName: activeApp.name,
-              headerTitle: chosenTpl.headerTitle,
-              preheader: chosenTpl.preheader,
-              bodyContent: chosenTpl.bodyContent,
-              highlightBox: chosenTpl.highlightBox,
-              ctaText: chosenTpl.ctaText,
-              ctaUrl: chosenTpl.ctaUrl,
-              accentColor: chosenTpl.accentColor || activeApp.accentColor
-            }),
-          recipients: [
-            {
-              email: smtpTestRecipient || testEmailAddress || 'csebelal9@gmail.com',
-              firstName: 'Belal',
-              company: activeApp.name,
-              appName: activeApp.name,
-              planTier: 'Enterprise'
-            }
-          ]
-        })
+      const res = await apiClient.post('/api/email/send', {
+        smtp: smtpConfig,
+        appName: activeApp.name,
+        subject: `[TEST] ${chosenTpl.subjectLine}`,
+        text: chosenTpl.bodyContent,
+        html:
+          chosenTpl.htmlCode ||
+          buildResponsiveEmailHtml({
+            appName: activeApp.name,
+            headerTitle: chosenTpl.headerTitle,
+            preheader: chosenTpl.preheader,
+            bodyContent: chosenTpl.bodyContent,
+            highlightBox: chosenTpl.highlightBox,
+            ctaText: chosenTpl.ctaText,
+            ctaUrl: chosenTpl.ctaUrl,
+            accentColor: chosenTpl.accentColor || activeApp.accentColor
+          }),
+        recipients: [
+          {
+            email: smtpTestRecipient || testEmailAddress || 'csebelal9@gmail.com',
+            firstName: 'Belal',
+            company: activeApp.name,
+            appName: activeApp.name,
+            planTier: 'Enterprise'
+          }
+        ]
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = res.data;
+      if (res.success && data?.success) {
         setTestSent(true);
         showNotification(data.message);
       } else {
-        showNotification(data.message || 'SMTP send failed.');
+        showNotification(data?.message || res.error || 'SMTP send failed.');
       }
     } catch {
       showNotification('Error sending test email.');
@@ -661,11 +650,7 @@ export const EmailView: React.FC<EmailViewProps> = ({
       };
 
       if (onSubmitApproval) onSubmitApproval(approvalItem);
-      fetch('/api/approvals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(approvalItem)
-      }).catch(() => {});
+      apiClient.post('/api/approvals', approvalItem).catch(() => {});
 
       showNotification(`Campaign "${finalTitle}" queued in Approval Gate.`);
       return;
@@ -674,20 +659,16 @@ export const EmailView: React.FC<EmailViewProps> = ({
     // Direct Dispatch via Business SMTP
     setDispatchSending(true);
     try {
-      const res = await fetch('/api/email/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          smtp: smtpConfig,
-          appName: activeApp.name,
-          subject: chosenTemplate.subjectLine,
-          text: chosenTemplate.bodyContent,
-          html: htmlPayload,
-          recipients: targetList
-        })
+      const res = await apiClient.post('/api/email/send', {
+        smtp: smtpConfig,
+        appName: activeApp.name,
+        subject: chosenTemplate.subjectLine,
+        text: chosenTemplate.bodyContent,
+        html: htmlPayload,
+        recipients: targetList
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = res.data;
+      if (res.success && data?.success) {
         const sentBroadcast: EmailCampaign = {
           id: `em-${Date.now()}`,
           appId: activeApp.id,

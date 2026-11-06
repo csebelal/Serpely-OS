@@ -19,8 +19,8 @@ import {
   Link2,
   AlertTriangle
 } from 'lucide-react';
-import { mockCommunityMessages } from '../../data/mock-data';
 import { CommunityMessage, ViewId } from '../../types';
+import { apiClient } from '../../services/apiClient';
 
 interface CommunityViewProps {
   onNavigate: (view: ViewId) => void;
@@ -122,12 +122,9 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   const handleSyncSocialPages = async () => {
     setIsSyncingSocial(true);
     try {
-      const res = await fetch('/api/community/sync-social', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const res = await apiClient.post('/api/community/sync-social');
+      const data = res.data;
+      if (res.success && data?.success) {
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else if (Array.isArray(data.addedMessages)) {
@@ -147,7 +144,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
           );
         }
       } else {
-        notify(data.error || 'Could not sync social pages.');
+        notify(data?.error || res.error || 'Could not sync social pages.');
       }
     } catch {
       notify('Network error while syncing social comments.');
@@ -163,20 +160,16 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     setIsSyncingPost(true);
     setSyncPostResult(null);
     try {
-      const res = await fetch('/api/community/sync-post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postUrl: postUrlInput.trim() })
-      });
-      const data = await res.json();
-      if (data.rateLimited) {
+      const res = await apiClient.post('/api/community/sync-post', { postUrl: postUrlInput.trim() });
+      const data = res.data;
+      if (data?.rateLimited) {
         setSyncPostResult({
           rateLimited: true,
           commentCount: data.commentCount,
           message: data.message
         });
         notify(data.message || 'LinkedIn rate limit active. Live comments confirmed.');
-      } else if (res.ok && data.success) {
+      } else if (res.success && data?.success) {
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else if (Array.isArray(data.addedMessages)) {
@@ -191,7 +184,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
         notify(data.message || `Successfully synced comments for post!`);
         setModalOpen(false);
       } else {
-        notify(data.error || 'Failed to sync post comments.');
+        notify(data?.error || res.error || 'Failed to sync post comments.');
       }
     } catch {
       notify('Network error syncing post comments.');
@@ -204,9 +197,9 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   const handleClearDemos = async () => {
     setIsClearingDemos(true);
     try {
-      const res = await fetch('/api/community/clear-demos', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const res = await apiClient.post('/api/community/clear-demos');
+      const data = res.data;
+      if (res.success && data?.success) {
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else {
@@ -233,21 +226,17 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     if (!manualText.trim()) return;
     setIsSubmittingManual(true);
     try {
-      const res = await fetch('/api/community/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender: manualSender.trim() || 'Inbound Prospect',
-          senderRole: manualRole.trim(),
-          senderCompany: manualCompany.trim(),
-          platform: manualPlatform,
-          type: manualType,
-          message: manualText.trim(),
-          sourceChannel: 'manual'
-        })
+      const res = await apiClient.post('/api/community/webhook', {
+        sender: manualSender.trim() || 'Inbound Prospect',
+        senderRole: manualRole.trim(),
+        senderCompany: manualCompany.trim(),
+        platform: manualPlatform,
+        type: manualType,
+        message: manualText.trim(),
+        sourceChannel: 'manual'
       });
-      const data = await res.json();
-      if (res.ok && data.message) {
+      const data = res.data;
+      if (res.success && data?.message) {
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else {
@@ -276,21 +265,17 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   const handleSimulateWebhookCall = async () => {
     setIsSubmittingManual(true);
     try {
-      const res = await fetch('/api/community/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender: 'Arifur Rahman',
-          senderRole: 'VP of Engineering',
-          senderCompany: 'DataPulse AI',
-          platform: 'LinkedIn',
-          type: 'comment',
-          message: `We just saw your benchmark on AI Search visibility. Does ${brandName} have a webhook API and SQL backend for enterprise marketing teams?`,
-          sourceChannel: 'webhook'
-        })
+      const res = await apiClient.post('/api/community/webhook', {
+        sender: 'Arifur Rahman',
+        senderRole: 'VP of Engineering',
+        senderCompany: 'DataPulse AI',
+        platform: 'LinkedIn',
+        type: 'comment',
+        message: `We just saw your benchmark on AI Search visibility. Does ${brandName} have a webhook API and SQL backend for enterprise marketing teams?`,
+        sourceChannel: 'webhook'
       });
-      const data = await res.json();
-      if (res.ok && data.message) {
+      const data = res.data;
+      if (res.success && data?.message) {
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         }
@@ -311,16 +296,12 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     if (!selectedMsg) return;
     setIsRegenerating(true);
     try {
-      const res = await fetch('/api/community/regenerate-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageId: selectedMsg.id,
-          tone: replyTone
-        })
+      const res = await apiClient.post('/api/community/regenerate-draft', {
+        messageId: selectedMsg.id,
+        tone: replyTone
       });
-      const data = await res.json();
-      if (res.ok && data.draftReply) {
+      const data = res.data;
+      if (res.success && data?.draftReply) {
         setDraftReply(data.draftReply);
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
@@ -345,17 +326,13 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     if (!selectedMsg || !draftReply.trim()) return;
     setIsPublishingReply(true);
     try {
-      const res = await fetch('/api/community/reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageId: selectedMsg.id,
-          replyText: draftReply.trim(),
-          convertToLead: autoConvertLead
-        })
+      const res = await apiClient.post('/api/community/reply', {
+        messageId: selectedMsg.id,
+        replyText: draftReply.trim(),
+        convertToLead: autoConvertLead
       });
-      const data = await res.json();
-      if (res.ok && data.message) {
+      const data = res.data;
+      if (res.success && data?.message) {
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else {
@@ -385,13 +362,9 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     }
     setIsConvertingLead(true);
     try {
-      const res = await fetch('/api/community/convert-lead', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageId: selectedMsg.id })
-      });
-      const data = await res.json();
-      if (res.ok && data.message) {
+      const res = await apiClient.post('/api/community/convert-lead', { messageId: selectedMsg.id });
+      const data = res.data;
+      if (res.success && data?.message) {
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else {

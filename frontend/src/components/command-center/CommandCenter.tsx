@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { ChatMessage, OrchestrationStep, ViewId } from '../../types';
 import { planOrchestration } from '../../services/ai-orchestrator';
+import { apiClient } from '../../services/apiClient';
 
 interface CommandCenterProps {
   isOpen: boolean;
@@ -75,14 +76,10 @@ Give me any high-level objective — I will decompose the strategy, assign the r
     const plan = planOrchestration(query);
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: query })
-      });
+      const res = await apiClient.post('/api/chat', { prompt: query });
 
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         }

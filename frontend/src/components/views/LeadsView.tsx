@@ -22,9 +22,9 @@ import {
   Calendar
 } from 'lucide-react';
 import { LeadItem, ViewId, MeetingItem } from '../../types';
-import { mockLeads } from '../../data/mock-data';
 import { ScheduleMeetingModal } from '../meetings/ScheduleMeetingModal';
 import { LeadsEmptyState, FilterResultsEmptyState } from '../common/EmptyState';
+import { apiClient } from '../../services/apiClient';
 
 interface LeadsViewProps {
   onNavigate: (view: ViewId) => void;
@@ -154,13 +154,9 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
   const handleScanBuyingSignals = async () => {
     setIsScanning(true);
     try {
-      const res = await fetch('/api/leads/scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const res = await apiClient.post('/api/leads/scan', {});
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else if (data.leads?.length) {
@@ -188,20 +184,16 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     if (!manualName.trim() || !manualMessage.trim()) return;
     setIsSubmittingManual(true);
     try {
-      const res = await fetch('/api/leads/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: manualName.trim(),
-          company: manualCompany.trim() || 'Enterprise Prospect',
-          role: manualRole.trim() || 'Growth Leader',
-          email: manualEmail.trim(),
-          source: manualSource,
-          message: manualMessage.trim()
-        })
+      const res = await apiClient.post('/api/leads/webhook', {
+        name: manualName.trim(),
+        company: manualCompany.trim() || 'Enterprise Prospect',
+        role: manualRole.trim() || 'Growth Leader',
+        email: manualEmail.trim(),
+        source: manualSource,
+        message: manualMessage.trim()
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else if (data.lead) {
@@ -297,20 +289,16 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     if (!whName.trim() || !whMessage.trim()) return;
     setIsTestingWebhook(true);
     try {
-      const res = await fetch('/api/leads/webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: whName,
-          company: whCompany,
-          role: whRole,
-          email: whEmail,
-          source: whSource,
-          message: whMessage
-        })
+      const res = await apiClient.post('/api/leads/webhook', {
+        name: whName,
+        company: whCompany,
+        role: whRole,
+        email: whEmail,
+        source: whSource,
+        message: whMessage
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else if (data.lead) {
@@ -379,16 +367,12 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     if (!selectedLead) return;
     setIsGeneratingOutreach(true);
     try {
-      const res = await fetch('/api/leads/outreach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadId: selectedLead.id,
-          channel: outreachChannel
-        })
+      const res = await apiClient.post('/api/leads/outreach', {
+        leadId: selectedLead.id,
+        channel: outreachChannel
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.outreachDraft) {
           setDraftSubject(data.outreachDraft.subject);
           setDraftBody(data.outreachDraft.body);
@@ -414,18 +398,14 @@ export const LeadsView: React.FC<LeadsViewProps> = ({
     if (!selectedLead) return;
     setIsEnrolling(true);
     try {
-      const res = await fetch('/api/leads/enroll-sequence', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadId: selectedLead.id,
-          sequenceName: selectedSequence,
-          subject: draftSubject,
-          body: draftBody
-        })
+      const res = await apiClient.post('/api/leads/enroll-sequence', {
+        leadId: selectedLead.id,
+        sequenceName: selectedSequence,
+        subject: draftSubject,
+        body: draftBody
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         }

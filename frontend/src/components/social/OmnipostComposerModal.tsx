@@ -31,6 +31,7 @@ import {
   VisualCardLayout,
   ViewId
 } from '../../types';
+import { apiClient } from '../../services/apiClient';
 import {
   generateBrandedSocialSvgDataUri,
   mockKeywordResearchBriefs
@@ -274,17 +275,13 @@ export const OmnipostComposerModal: React.FC<OmnipostComposerModalProps> = ({
   const handleGenerateAllWithAI = async () => {
     setIsGenerating(true);
     try {
-      const res = await fetch('/api/social/research-and-draft', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: masterTopic,
-          platform: 'LinkedIn'
-        })
+      const res = await apiClient.post('/api/social/research-and-draft', {
+        topic: masterTopic,
+        platform: 'LinkedIn'
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         const generated = data.content || '';
         
         // Adapt base content into platform-specific structures
@@ -364,20 +361,16 @@ export const OmnipostComposerModal: React.FC<OmnipostComposerModalProps> = ({
 
     if (dispatchMode === 'queue') {
       batchPosts.forEach(post => {
-        fetch('/api/social/scheduling/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            platform: post.platform,
-            content: post.content,
-            scheduledTimestamp: Date.now() + 2 * 3600 * 1000,
-            scheduledTimeFormatted: nextQueueSlot,
-            pageId: post.pageId,
-            pageName: post.pageName,
-            pageHandle: post.pageHandle,
-            visualUrl: post.visualUrl,
-            tags: post.hashtags
-          })
+        apiClient.post('/api/social/scheduling/create', {
+          platform: post.platform,
+          content: post.content,
+          scheduledTimestamp: Date.now() + 2 * 3600 * 1000,
+          scheduledTimeFormatted: nextQueueSlot,
+          pageId: post.pageId,
+          pageName: post.pageName,
+          pageHandle: post.pageHandle,
+          visualUrl: post.visualUrl,
+          tags: post.hashtags
         }).catch(() => {});
       });
     }

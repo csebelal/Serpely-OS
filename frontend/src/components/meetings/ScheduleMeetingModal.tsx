@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { MeetingItem, MeetingType, MeetingPlatform, LeadItem } from '../../types';
 import { SlackIcon, DiscordIcon } from '../social/SocialPlatformIcons';
+import { apiClient } from '../../services/apiClient';
 
 interface ScheduleMeetingModalProps {
   isOpen: boolean;
@@ -150,19 +151,16 @@ export const ScheduleMeetingModal: React.FC<ScheduleMeetingModalProps> = ({
       const endpoint = editingMeeting ? `/api/meetings/${editingMeeting.id}` : '/api/meetings';
       const method = editingMeeting ? 'PUT' : 'POST';
 
-      const res = await fetch(endpoint, {
+      const res = await apiClient.request(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(meetingPayload)
+        body: meetingPayload
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        onMeetingScheduled(data.meeting);
+      if (res.success && res.data) {
+        onMeetingScheduled(res.data.meeting);
         onClose();
       } else {
-        const err = await res.json();
-        setErrorMsg(err.error || 'Failed to save meeting.');
+        setErrorMsg(res.error || 'Failed to save meeting.');
       }
     } catch (err: any) {
       // Local fallback in offline mode

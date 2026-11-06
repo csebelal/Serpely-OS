@@ -25,9 +25,9 @@ import {
   Check,
   Webhook
 } from 'lucide-react';
-import { mockAutomations } from '../../data/mock-data';
 import { AutomationRule } from '../../types';
 import { WebhookHubStudio } from '../integrations/WebhookHubStudio';
+import { apiClient } from '../../services/apiClient';
 
 interface AutomationViewProps {
   automationsList?: AutomationRule[];
@@ -179,10 +179,8 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
   const [formActive, setFormActive] = useState(true);
 
   useEffect(() => {
-    if (automationsList && automationsList.length > 0) {
+    if (automationsList) {
       setAutomations(automationsList);
-    } else if (automations.length === 0) {
-      setAutomations(mockAutomations);
     }
   }, [automationsList]);
 
@@ -224,13 +222,10 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
     setExecutionResult(null);
 
     try {
-      const res = await fetch(`/api/automations/${rule.id}/trigger`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      const data = await res.json();
+      const res = await apiClient.post(`/api/automations/${rule.id}/trigger`);
+      const data = res.data;
 
-      if (data.success && data.automation) {
+      if (res.success && data?.success && data?.automation) {
         const next = automations.map(a => (a.id === rule.id ? data.automation : a));
         setAutomations(next);
         if (onUpdateAutomations) onUpdateAutomations(next);
@@ -310,23 +305,20 @@ export const AutomationView: React.FC<AutomationViewProps> = ({
     setIsTestingWebhook(true);
     setTestWebhookRes(null);
     try {
-      const res = await fetch('/api/webhooks/competitor-radar', {
-        method: 'POST',
+      const res = await apiClient.post('/api/webhooks/competitor-radar', {
+        event: 'competitor.found',
+        competitor: 'Semrush Enterprise',
+        change: 'New Generative AI SEO pricing tier announced'
+      }, {
         headers: {
-          'Content-Type': 'application/json',
           'X-AMH-Signature': 'sha256=9b84a2f8c7e4'
-        },
-        body: JSON.stringify({
-          event: 'competitor.found',
-          competitor: 'Semrush Enterprise',
-          change: 'New Generative AI SEO pricing tier announced'
-        })
+        }
       });
-      const data = await res.json();
-      if (data.state && onStateSynced) {
+      const data = res.data;
+      if (data?.state && onStateSynced) {
         onStateSynced(data.state);
       }
-      const { state: _omitted, ...cleanResponse } = data;
+      const { state: _omitted, ...cleanResponse } = data || {};
       setTestWebhookRes(JSON.stringify(cleanResponse, null, 2));
     } catch {
       setTestWebhookRes(

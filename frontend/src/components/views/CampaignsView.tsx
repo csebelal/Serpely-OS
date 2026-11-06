@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { AgentId, CampaignItem, ViewId } from '../../types';
 import { CampaignsEmptyState, FilterResultsEmptyState } from '../common/EmptyState';
+import { apiClient } from '../../services/apiClient';
 
 interface CampaignsViewProps {
   campaigns: CampaignItem[];
@@ -194,13 +195,9 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
       'Launch Q4 Enterprise AI SEO & Autonomous Marketing Platform targeting B2B SaaS Founders';
     setIsAiGenerating(true);
     try {
-      const res = await fetch('/api/campaigns/ai-create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ goalPrompt: prompt })
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const res = await apiClient.post('/api/campaigns/ai-create', { goalPrompt: prompt });
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else if (data.campaign) {
@@ -281,17 +278,13 @@ export const CampaignsView: React.FC<CampaignsViewProps> = ({
     setInspectedStageNum(stageNum);
 
     try {
-      const res = await fetch('/api/campaigns/execute-stage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          campaignId: cmp.id,
-          stageNumber: stageNum,
-          advance
-        })
+      const res = await apiClient.post('/api/campaigns/execute-stage', {
+        campaignId: cmp.id,
+        stageNumber: stageNum,
+        advance
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         } else if (data.campaign) {

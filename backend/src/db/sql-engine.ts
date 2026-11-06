@@ -587,183 +587,309 @@ async function syncStateToPostgres(dbState: any, nowIso: string, pool: pg.Pool):
       );
     }
 
-    // 2. Campaigns
-    await client.query('DELETE FROM campaigns');
-    for (const c of dbState.campaigns || []) {
-      await client.query(
-        `INSERT INTO campaigns (
-          id, name, status, current_stage, lead_agent,
-          budget_allocated, budget_spent, primary_metric_name,
-          primary_metric_value, primary_metric_target, channels_csv,
-          start_date, end_date, payload_json, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-        [
-          String(c.id),
-          String(c.name || ''),
-          String(c.status || 'planning'),
-          Number(c.currentStage || 1),
-          String(c.leadAgent || 'orchestrator'),
-          Number(c.budget?.allocated || 0),
-          Number(c.budget?.spent || 0),
-          String(c.primaryMetric?.name || ''),
-          String(c.primaryMetric?.value || ''),
-          String(c.primaryMetric?.target || ''),
-          Array.isArray(c.channels) ? c.channels.join(', ') : '',
-          String(c.startDate || ''),
-          String(c.endDate || ''),
-          JSON.stringify(c),
-          nowIso
-        ]
-      );
+    // 2. Campaigns (Atomic Upsert & Reconciliation)
+    const campaignItems = dbState.campaigns || [];
+    const campaignIds = campaignItems.map((c: any) => String(c.id)).filter(Boolean);
+    if (campaignIds.length > 0) {
+      for (const c of campaignItems) {
+        await client.query(
+          `INSERT INTO campaigns (
+            id, name, status, current_stage, lead_agent,
+            budget_allocated, budget_spent, primary_metric_name,
+            primary_metric_value, primary_metric_target, channels_csv,
+            start_date, end_date, payload_json, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            status = EXCLUDED.status,
+            current_stage = EXCLUDED.current_stage,
+            lead_agent = EXCLUDED.lead_agent,
+            budget_allocated = EXCLUDED.budget_allocated,
+            budget_spent = EXCLUDED.budget_spent,
+            primary_metric_name = EXCLUDED.primary_metric_name,
+            primary_metric_value = EXCLUDED.primary_metric_value,
+            primary_metric_target = EXCLUDED.primary_metric_target,
+            channels_csv = EXCLUDED.channels_csv,
+            start_date = EXCLUDED.start_date,
+            end_date = EXCLUDED.end_date,
+            payload_json = EXCLUDED.payload_json,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            String(c.id),
+            String(c.name || ''),
+            String(c.status || 'planning'),
+            Number(c.currentStage || 1),
+            String(c.leadAgent || 'orchestrator'),
+            Number(c.budget?.allocated || 0),
+            Number(c.budget?.spent || 0),
+            String(c.primaryMetric?.name || ''),
+            String(c.primaryMetric?.value || ''),
+            String(c.primaryMetric?.target || ''),
+            Array.isArray(c.channels) ? c.channels.join(', ') : '',
+            String(c.startDate || ''),
+            String(c.endDate || ''),
+            JSON.stringify(c),
+            nowIso
+          ]
+        );
+      }
+      await client.query('DELETE FROM campaigns WHERE id NOT IN (SELECT unnest($1::text[]))', [campaignIds]);
+    } else {
+      await client.query('DELETE FROM campaigns');
     }
 
-    // 3. Content Items
-    await client.query('DELETE FROM content_items');
-    for (const item of dbState.contentList || []) {
-      const words = String(item.body || '').trim().split(/\s+/).filter(Boolean).length;
-      await client.query(
-        `INSERT INTO content_items (
-          id, title, type, platform, status, author_agent,
-          word_count, views, clicks, tags_csv, created_at,
-          body, payload_json, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-        [
-          String(item.id),
-          String(item.title || ''),
-          String(item.type || 'blog'),
-          String(item.platform || 'Blog'),
-          String(item.status || 'draft'),
-          String(item.authorAgent || 'content'),
-          words,
-          Number(item.metrics?.views || 0),
-          Number(item.metrics?.clicks || 0),
-          Array.isArray(item.tags) ? item.tags.join(', ') : '',
-          String(item.createdAt || ''),
-          String(item.body || ''),
-          JSON.stringify(item),
-          nowIso
-        ]
-      );
+    // 3. Content Items (Atomic Upsert & Reconciliation)
+    const contentItems = dbState.contentList || [];
+    const contentIds = contentItems.map((item: any) => String(item.id)).filter(Boolean);
+    if (contentIds.length > 0) {
+      for (const item of contentItems) {
+        const words = String(item.body || '').trim().split(/\s+/).filter(Boolean).length;
+        await client.query(
+          `INSERT INTO content_items (
+            id, title, type, platform, status, author_agent,
+            word_count, views, clicks, tags_csv, created_at,
+            body, payload_json, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            type = EXCLUDED.type,
+            platform = EXCLUDED.platform,
+            status = EXCLUDED.status,
+            author_agent = EXCLUDED.author_agent,
+            word_count = EXCLUDED.word_count,
+            views = EXCLUDED.views,
+            clicks = EXCLUDED.clicks,
+            tags_csv = EXCLUDED.tags_csv,
+            created_at = EXCLUDED.created_at,
+            body = EXCLUDED.body,
+            payload_json = EXCLUDED.payload_json,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            String(item.id),
+            String(item.title || ''),
+            String(item.type || 'blog'),
+            String(item.platform || 'Blog'),
+            String(item.status || 'draft'),
+            String(item.authorAgent || 'content'),
+            words,
+            Number(item.metrics?.views || 0),
+            Number(item.metrics?.clicks || 0),
+            Array.isArray(item.tags) ? item.tags.join(', ') : '',
+            String(item.createdAt || ''),
+            String(item.body || ''),
+            JSON.stringify(item),
+            nowIso
+          ]
+        );
+      }
+      await client.query('DELETE FROM content_items WHERE id NOT IN (SELECT unnest($1::text[]))', [contentIds]);
+    } else {
+      await client.query('DELETE FROM content_items');
     }
 
-    // 4. Approvals
-    await client.query('DELETE FROM approvals');
-    for (const a of dbState.approvals || []) {
-      await client.query(
-        `INSERT INTO approvals (
-          id, title, agent, content_type, platform, risk_level,
-          status, campaign, budget_impact, submitted_at, preview,
-          payload_json, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [
-          String(a.id),
-          String(a.title || ''),
-          String(a.agent || 'orchestrator'),
-          String(a.contentType || 'social-post'),
-          String(a.platform || ''),
-          String(a.riskLevel || 'medium'),
-          String(a.status || 'pending'),
-          String(a.campaign || ''),
-          String(a.budgetImpact || ''),
-          String(a.submittedAt || ''),
-          String(a.preview || ''),
-          JSON.stringify(a),
-          nowIso
-        ]
-      );
+    // 4. Approvals (Atomic Upsert & Reconciliation)
+    const approvalItems = dbState.approvals || [];
+    const approvalIds = approvalItems.map((a: any) => String(a.id)).filter(Boolean);
+    if (approvalIds.length > 0) {
+      for (const a of approvalItems) {
+        await client.query(
+          `INSERT INTO approvals (
+            id, title, agent, content_type, platform, risk_level,
+            status, campaign, budget_impact, submitted_at, preview,
+            payload_json, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            agent = EXCLUDED.agent,
+            content_type = EXCLUDED.content_type,
+            platform = EXCLUDED.platform,
+            risk_level = EXCLUDED.risk_level,
+            status = EXCLUDED.status,
+            campaign = EXCLUDED.campaign,
+            budget_impact = EXCLUDED.budget_impact,
+            submitted_at = EXCLUDED.submitted_at,
+            preview = EXCLUDED.preview,
+            payload_json = EXCLUDED.payload_json,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            String(a.id),
+            String(a.title || ''),
+            String(a.agent || 'orchestrator'),
+            String(a.contentType || 'social-post'),
+            String(a.platform || ''),
+            String(a.riskLevel || 'medium'),
+            String(a.status || 'pending'),
+            String(a.campaign || ''),
+            String(a.budgetImpact || ''),
+            String(a.submittedAt || ''),
+            String(a.preview || ''),
+            JSON.stringify(a),
+            nowIso
+          ]
+        );
+      }
+      await client.query('DELETE FROM approvals WHERE id NOT IN (SELECT unnest($1::text[]))', [approvalIds]);
+    } else {
+      await client.query('DELETE FROM approvals');
     }
 
-    // 5. Leads
-    await client.query('DELETE FROM leads');
-    for (const l of dbState.leads || []) {
-      await client.query(
-        `INSERT INTO leads (
-          id, name, company, role, source, status,
-          intent, score, assigned_agent, timestamp, payload_json, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-        [
-          String(l.id),
-          String(l.name || ''),
-          String(l.company || ''),
-          String(l.role || ''),
-          String(l.source || ''),
-          String(l.status || 'new'),
-          String(l.intent || ''),
-          Number(l.score || 0),
-          String(l.assignedAgent || 'leads'),
-          String(l.timestamp || ''),
-          JSON.stringify(l),
-          nowIso
-        ]
-      );
+    // 5. Leads (Atomic Upsert & Reconciliation)
+    const leadItems = dbState.leads || [];
+    const leadIds = leadItems.map((l: any) => String(l.id)).filter(Boolean);
+    if (leadIds.length > 0) {
+      for (const l of leadItems) {
+        await client.query(
+          `INSERT INTO leads (
+            id, name, company, role, source, status,
+            intent, score, assigned_agent, timestamp, payload_json, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            company = EXCLUDED.company,
+            role = EXCLUDED.role,
+            source = EXCLUDED.source,
+            status = EXCLUDED.status,
+            intent = EXCLUDED.intent,
+            score = EXCLUDED.score,
+            assigned_agent = EXCLUDED.assigned_agent,
+            timestamp = EXCLUDED.timestamp,
+            payload_json = EXCLUDED.payload_json,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            String(l.id),
+            String(l.name || ''),
+            String(l.company || ''),
+            String(l.role || ''),
+            String(l.source || ''),
+            String(l.status || 'new'),
+            String(l.intent || ''),
+            Number(l.score || 0),
+            String(l.assignedAgent || 'leads'),
+            String(l.timestamp || ''),
+            JSON.stringify(l),
+            nowIso
+          ]
+        );
+      }
+      await client.query('DELETE FROM leads WHERE id NOT IN (SELECT unnest($1::text[]))', [leadIds]);
+    } else {
+      await client.query('DELETE FROM leads');
     }
 
-    // 6. Social Posts
-    await client.query('DELETE FROM social_posts');
-    for (const sp of dbState.socialPosts || []) {
-      await client.query(
-        `INSERT INTO social_posts (
-          id, platform, status, day_of_week, scheduled_time,
-          author_agent, media_type, content, payload_json, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [
-          String(sp.id),
-          String(sp.platform || 'LinkedIn'),
-          String(sp.status || 'scheduled'),
-          String(sp.dayOfWeek || ''),
-          String(sp.scheduledTime || ''),
-          String(sp.authorAgent || 'social'),
-          String(sp.mediaType || 'text'),
-          String(sp.content || ''),
-          JSON.stringify(sp),
-          nowIso
-        ]
-      );
+    // 6. Social Posts (Atomic Upsert & Reconciliation)
+    const socialItems = dbState.socialPosts || [];
+    const socialIds = socialItems.map((sp: any) => String(sp.id)).filter(Boolean);
+    if (socialIds.length > 0) {
+      for (const sp of socialItems) {
+        await client.query(
+          `INSERT INTO social_posts (
+            id, platform, status, day_of_week, scheduled_time,
+            author_agent, media_type, content, payload_json, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          ON CONFLICT (id) DO UPDATE SET
+            platform = EXCLUDED.platform,
+            status = EXCLUDED.status,
+            day_of_week = EXCLUDED.day_of_week,
+            scheduled_time = EXCLUDED.scheduled_time,
+            author_agent = EXCLUDED.author_agent,
+            media_type = EXCLUDED.media_type,
+            content = EXCLUDED.content,
+            payload_json = EXCLUDED.payload_json,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            String(sp.id),
+            String(sp.platform || 'LinkedIn'),
+            String(sp.status || 'scheduled'),
+            String(sp.dayOfWeek || ''),
+            String(sp.scheduledTime || ''),
+            String(sp.authorAgent || 'social'),
+            String(sp.mediaType || 'text'),
+            String(sp.content || ''),
+            JSON.stringify(sp),
+            nowIso
+          ]
+        );
+      }
+      await client.query('DELETE FROM social_posts WHERE id NOT IN (SELECT unnest($1::text[]))', [socialIds]);
+    } else {
+      await client.query('DELETE FROM social_posts');
     }
 
-    // 7. Page Posts
-    await client.query('DELETE FROM page_posts');
-    for (const pp of dbState.pagePosts || []) {
-      await client.query(
-        `INSERT INTO page_posts (
-          id, platform, page_name, keyword, status,
-          impressions, clicks, engagement_rate, created_at, payload_json, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [
-          String(pp.id),
-          String(pp.platform || 'LinkedIn'),
-          String(pp.pageName || ''),
-          String(pp.keyword || ''),
-          String(pp.status || 'live'),
-          Number(pp.analytics?.impressions || pp.impressions || 0),
-          Number(pp.analytics?.clicks || pp.clicks || 0),
-          Number(pp.analytics?.engagementRate || pp.engagementRate || 0),
-          String(pp.createdAt || ''),
-          JSON.stringify(pp),
-          nowIso
-        ]
-      );
+    // 7. Page Posts (Atomic Upsert & Reconciliation)
+    const pagePostItems = dbState.pagePosts || [];
+    const pagePostIds = pagePostItems.map((pp: any) => String(pp.id)).filter(Boolean);
+    if (pagePostIds.length > 0) {
+      for (const pp of pagePostItems) {
+        await client.query(
+          `INSERT INTO page_posts (
+            id, platform, page_name, keyword, status,
+            impressions, clicks, engagement_rate, created_at, payload_json, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          ON CONFLICT (id) DO UPDATE SET
+            platform = EXCLUDED.platform,
+            page_name = EXCLUDED.page_name,
+            keyword = EXCLUDED.keyword,
+            status = EXCLUDED.status,
+            impressions = EXCLUDED.impressions,
+            clicks = EXCLUDED.clicks,
+            engagement_rate = EXCLUDED.engagement_rate,
+            created_at = EXCLUDED.created_at,
+            payload_json = EXCLUDED.payload_json,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            String(pp.id),
+            String(pp.platform || 'LinkedIn'),
+            String(pp.pageName || ''),
+            String(pp.keyword || ''),
+            String(pp.status || 'live'),
+            Number(pp.analytics?.impressions || pp.impressions || 0),
+            Number(pp.analytics?.clicks || pp.clicks || 0),
+            Number(pp.analytics?.engagementRate || pp.engagementRate || 0),
+            String(pp.createdAt || ''),
+            JSON.stringify(pp),
+            nowIso
+          ]
+        );
+      }
+      await client.query('DELETE FROM page_posts WHERE id NOT IN (SELECT unnest($1::text[]))', [pagePostIds]);
+    } else {
+      await client.query('DELETE FROM page_posts');
     }
 
-    // 8. Integrations
-    await client.query('DELETE FROM integrations');
-    for (const int of dbState.integrations || []) {
-      await client.query(
-        `INSERT INTO integrations (
-          id, name, category, status, description, auth_method, last_sync, payload_json, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [
-          String(int.id),
-          String(int.name || ''),
-          String(int.category || 'ai'),
-          String(int.status || 'disconnected'),
-          String(int.description || ''),
-          String(int.authMethod || 'OAuth 2.0'),
-          String(int.lastSync || ''),
-          JSON.stringify(int),
-          nowIso
-        ]
-      );
+    // 8. Integrations (Atomic Upsert & Reconciliation)
+    const integrationItems = dbState.integrations || [];
+    const integrationIds = integrationItems.map((int: any) => String(int.id)).filter(Boolean);
+    if (integrationIds.length > 0) {
+      for (const int of integrationItems) {
+        await client.query(
+          `INSERT INTO integrations (
+            id, name, category, status, description, auth_method, last_sync, payload_json, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            category = EXCLUDED.category,
+            status = EXCLUDED.status,
+            description = EXCLUDED.description,
+            auth_method = EXCLUDED.auth_method,
+            last_sync = EXCLUDED.last_sync,
+            payload_json = EXCLUDED.payload_json,
+            updated_at = EXCLUDED.updated_at`,
+          [
+            String(int.id),
+            String(int.name || ''),
+            String(int.category || 'ai'),
+            String(int.status || 'disconnected'),
+            String(int.description || ''),
+            String(int.authMethod || 'OAuth 2.0'),
+            String(int.lastSync || ''),
+            JSON.stringify(int),
+            nowIso
+          ]
+        );
+      }
+      await client.query('DELETE FROM integrations WHERE id NOT IN (SELECT unnest($1::text[]))', [integrationIds]);
+    } else {
+      await client.query('DELETE FROM integrations');
     }
 
     await client.query('COMMIT');

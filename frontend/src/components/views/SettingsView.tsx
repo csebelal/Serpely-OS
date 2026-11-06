@@ -24,10 +24,24 @@ import {
   Palette,
   PlusCircle
 } from 'lucide-react';
-import { mockAgents, mockBrandProfile } from '../../data/mock-data';
+import { mockAgents } from '../../data/mock-data';
 import { BrandProfile, UserRole, RolePermissionConfig } from '../../types';
 import { getStoredRoles, deleteCustomRole, BASE_ROLE_CONFIGS } from '../../data/rbac-data';
 import { CreateRoleModal } from '../auth/CreateRoleModal';
+import { apiClient } from '../../services/apiClient';
+
+const DEFAULT_BLANK_BRAND: BrandProfile = {
+  name: 'My Workspace',
+  website: '',
+  industry: 'Technology',
+  description: '',
+  voiceTone: 'Professional, Authoritative & Engaging',
+  targetAudience: 'Global Audience',
+  tagline: 'Autonomous AI Growth & Marketing Engine',
+  mission: 'Scale revenue and brand authority through autonomous AI marketing orchestration.',
+  keyThemes: [],
+  brandColors: ['#10b981', '#064e3b', '#0f172a']
+};
 
 interface SettingsViewProps {
   brandProfile?: BrandProfile;
@@ -41,7 +55,7 @@ interface SettingsViewProps {
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
-  brandProfile = mockBrandProfile,
+  brandProfile = DEFAULT_BLANK_BRAND,
   onUpdateBrandProfile,
   onResetWorkspace,
   currentRole = 'director',
@@ -84,9 +98,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const fetchCredentialsVault = async () => {
     try {
-      const res = await fetch('/api/settings/credentials');
-      if (res.ok) {
-        const data = await res.json();
+      const res = await apiClient.get('/api/settings/credentials');
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.geminiApiKey) setCredGeminiKey(data.geminiApiKey);
         if (data.geminiImageApiKey) setCredGeminiImageKey(data.geminiImageApiKey);
         if (data.facebookClientId) setCredFbId(data.facebookClientId);
@@ -112,10 +126,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   const fetchDatabaseInfo = async () => {
     try {
-      const res = await fetch('/api/settings/database');
-      if (res.ok) {
-        const data = await res.json();
-        setDbInfo(data);
+      const res = await apiClient.get('/api/settings/database');
+      if (res.success && res.data) {
+        setDbInfo(res.data);
       }
     } catch {}
   };
@@ -128,18 +141,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsConnectingDb(true);
     setDbNotice(null);
     try {
-      const res = await fetch('/api/settings/database', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ databaseUrl: databaseUrlInput })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const res = await apiClient.post('/api/settings/database', { databaseUrl: databaseUrlInput });
+      const data = res.data;
+      if (res.success && data?.success) {
         setDbNotice({ msg: data.message, type: 'success' });
         setDatabaseUrlInput('');
         await fetchDatabaseInfo();
       } else {
-        setDbNotice({ msg: data.message || 'Connection failed', type: 'error' });
+        setDbNotice({ msg: data?.message || res.error || 'Connection failed', type: 'error' });
       }
     } catch (err: any) {
       setDbNotice({ msg: `Connection error: ${err?.message || 'Network error'}`, type: 'error' });
@@ -153,13 +162,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (!window.confirm('Disconnect external database and clear URL from .env?')) return;
     setIsConnectingDb(true);
     try {
-      const res = await fetch('/api/settings/database', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ databaseUrl: '' })
-      });
-      const data = await res.json();
-      setDbNotice({ msg: data.message || 'Database disconnected', type: 'success' });
+      const res = await apiClient.post('/api/settings/database', { databaseUrl: '' });
+      const data = res.data;
+      setDbNotice({ msg: data?.message || 'Database disconnected', type: 'success' });
       await fetchDatabaseInfo();
     } catch (err: any) {
       setDbNotice({ msg: `Error disconnecting: ${err?.message}`, type: 'error' });
@@ -189,13 +194,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (provider === 'google') payload = { googleClientId: credGoogleId, googleClientSecret: credGoogleSecret };
 
     try {
-      const res = await fetch('/api/settings/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      setVaultNotice({ msg: data.message || `${provider.toUpperCase()} saved & synced to .env!`, type: 'success' });
+      const res = await apiClient.post('/api/settings/credentials', payload);
+      const data = res.data;
+      setVaultNotice({ msg: data?.message || `${provider.toUpperCase()} saved & synced to .env!`, type: 'success' });
       await fetchCredentialsVault();
     } catch (err: any) {
       setVaultNotice({ msg: `Failed saving to .env: ${err?.message}`, type: 'error' });
@@ -210,18 +211,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setIsSavingVault(true);
     setVaultNotice(null);
     try {
-      const res = await fetch('/api/integrations/credentials/remove', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider })
-      });
-      const data = await res.json();
+      const res = await apiClient.post('/api/integrations/credentials/remove', { provider });
+      const data = res.data;
       if (provider === 'gemini') setCredGeminiKey('');
       if (provider === 'gemini_image') setCredGeminiImageKey('');
       if (provider === 'facebook') { setCredFbId(''); setCredFbSecret(''); }
       if (provider === 'linkedin') { setCredLiId(''); setCredLiSecret(''); }
       if (provider === 'google') { setCredGoogleId(''); setCredGoogleSecret(''); }
-      setVaultNotice({ msg: data.message || `${provider.toUpperCase()} credentials removed from .env!`, type: 'success' });
+      setVaultNotice({ msg: data?.message || `${provider.toUpperCase()} credentials removed from .env!`, type: 'success' });
     } catch (err: any) {
       setVaultNotice({ msg: `Failed removing: ${err?.message}`, type: 'error' });
     } finally {

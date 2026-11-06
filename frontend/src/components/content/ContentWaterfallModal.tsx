@@ -21,6 +21,7 @@ import {
   Film
 } from 'lucide-react';
 import { ThreadsIcon, PinterestIcon } from '../social/SocialPlatformIcons';
+import { apiClient } from '../../services/apiClient';
 
 interface LinkedInCarouselSlide {
   slideNumber: number;
@@ -168,20 +169,16 @@ export const ContentWaterfallModal: React.FC<ContentWaterfallModalProps> = ({
 
       setGenerationStep('Synthesizing 5-part omnichannel cascade via Gemini AI...');
 
-      const res = await fetch('/api/content/waterfall', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const res = await apiClient.post('/api/content/waterfall', payload);
 
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         setWaterfallResult(data.result);
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         }
       } else {
-        alert('Failed to generate waterfall content. Please check server logs.');
+        alert(res.error || 'Failed to generate waterfall content. Please check server logs.');
       }
     } catch (err: any) {
       alert(`Error running waterfall engine: ${err?.message || 'Network error'}`);
@@ -204,14 +201,10 @@ export const ContentWaterfallModal: React.FC<ContentWaterfallModalProps> = ({
       else if (inputMode === 'youtube') payload.youtubeUrl = youtubeUrl;
       else payload.sourceText = rawText;
 
-      const res = await fetch('/api/content/waterfall', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      const res = await apiClient.post('/api/content/waterfall', payload);
 
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         setQueuedSuccess(true);
         if (data.state && onStateSynced) {
           onStateSynced(data.state);

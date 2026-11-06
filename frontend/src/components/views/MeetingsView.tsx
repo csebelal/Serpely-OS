@@ -26,6 +26,7 @@ import {
 import { MeetingItem, MeetingStatus, MeetingType, LeadItem, ViewId } from '../../types';
 import { ScheduleMeetingModal } from '../meetings/ScheduleMeetingModal';
 import { SlackIcon, DiscordIcon } from '../social/SocialPlatformIcons';
+import { apiClient } from '../../services/apiClient';
 
 interface MeetingsViewProps {
   meetingsList: MeetingItem[];
@@ -116,10 +117,8 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   const handleBroadcastReminder = async (m: MeetingItem) => {
     setRemindingId(m.id);
     try {
-      const res = await fetch(`/api/meetings/${m.id}/remind`, {
-        method: 'POST'
-      });
-      if (res.ok) {
+      const res = await apiClient.post(`/api/meetings/${m.id}/remind`);
+      if (res.success) {
         notify(`🔔 Dispatched 15-min reminder for "${m.title}" to Slack & Discord!`);
       } else {
         notify(`Simulated reminder broadcast to Slack & Discord for ${m.clientName}.`);
@@ -134,11 +133,7 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   // Handle status update (e.g. Mark Completed, Cancel, Confirm)
   const handleUpdateStatus = async (meetingId: string, nextStatus: MeetingStatus) => {
     try {
-      await fetch(`/api/meetings/${meetingId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus })
-      });
+      await apiClient.put(`/api/meetings/${meetingId}`, { status: nextStatus });
     } catch {
       // Offline fallback
     }
@@ -153,7 +148,7 @@ export const MeetingsView: React.FC<MeetingsViewProps> = ({
   const handleDeleteMeeting = async (meetingId: string) => {
     if (!confirm('Are you sure you want to cancel this scheduled meeting?')) return;
     try {
-      await fetch(`/api/meetings/${meetingId}`, { method: 'DELETE' });
+      await apiClient.delete(`/api/meetings/${meetingId}`);
     } catch {
       // Offline fallback
     }

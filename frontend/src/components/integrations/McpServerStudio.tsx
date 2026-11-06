@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import { apiClient } from '../../services/apiClient';
 
 interface ToolSchema {
   name: string;
@@ -59,12 +60,11 @@ export const McpServerStudio: React.FC = () => {
   const fetchManifest = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/mcp/manifest');
-      if (res.ok) {
-        const data = await res.json();
-        setManifest(data);
-        if (data.tools?.length > 0 && !selectedTool) {
-          handleSelectTool(data.tools[0]);
+      const res = await apiClient.get('/api/mcp/manifest');
+      if (res.success && res.data) {
+        setManifest(res.data);
+        if (res.data.tools?.length > 0 && !selectedTool) {
+          handleSelectTool(res.data.tools[0]);
         }
       }
     } catch {
@@ -145,19 +145,14 @@ export const McpServerStudio: React.FC = () => {
 
     const start = performance.now();
     try {
-      const res = await fetch('/api/mcp/test-tool', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: selectedTool.name,
-          arguments: parsedArgs
-        })
+      const res = await apiClient.post('/api/mcp/test-tool', {
+        name: selectedTool.name,
+        arguments: parsedArgs
       });
       const end = performance.now();
       setExecutionLatencyMs(Math.round(end - start));
 
-      const data = await res.json();
-      setToolExecutionResult(data);
+      setToolExecutionResult(res.data || { error: res.error });
     } catch (err: any) {
       setToolExecutionResult({
         error: `Tool execution failed: ${err?.message || 'Network error'}`

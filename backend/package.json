@@ -7,6 +7,7 @@
     "dev": "tsx watch server.ts",
     "start": "tsx server.ts",
     "db:view": "node src/db/view-db.cjs",
+    "test": "vitest run",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

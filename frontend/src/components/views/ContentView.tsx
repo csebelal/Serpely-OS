@@ -26,6 +26,7 @@ import {
 import { ContentItem, ViewId } from '../../types';
 import { ContentWaterfallModal } from '../content/ContentWaterfallModal';
 import { ContentStudioEmptyState, FilterResultsEmptyState } from '../common/EmptyState';
+import { apiClient } from '../../services/apiClient';
 
 interface ContentViewProps {
   contentList: ContentItem[];
@@ -144,19 +145,15 @@ export const ContentView: React.FC<ContentViewProps> = ({
     if (!editingItem) return;
     setAiEnhanceMode(mode);
     try {
-      const res = await fetch('/api/content/ai-enhance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contentId: editingItem.id,
-          title: editTitle,
-          body: editBody,
-          platform: editPlatform,
-          mode
-        })
+      const res = await apiClient.post('/api/content/ai-enhance', {
+        contentId: editingItem.id,
+        title: editTitle,
+        body: editBody,
+        platform: editPlatform,
+        mode
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         const nextTitle = data.title || editTitle;
         const nextBody = data.body || editBody;
         setEditTitle(nextTitle);
@@ -188,16 +185,12 @@ export const ContentView: React.FC<ContentViewProps> = ({
     const key = `${item.id}-${targetChannel}`;
     setRepurposingKey(key);
     try {
-      const res = await fetch('/api/content/repurpose', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contentId: item.id,
-          targetChannel
-        })
+      const res = await apiClient.post('/api/content/repurpose', {
+        contentId: item.id,
+        targetChannel
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         }
@@ -267,17 +260,13 @@ export const ContentView: React.FC<ContentViewProps> = ({
     if (!newTitle.trim() && !newKeyword.trim()) return;
     setIsGeneratingAi(true);
     try {
-      const res = await fetch('/api/content/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: newTitle || `${newKeyword} Implementation Playbook`,
-          platform: newPlatform,
-          targetKeyword: newKeyword || 'AI Marketing OS'
-        })
+      const res = await apiClient.post('/api/content/generate', {
+        topic: newTitle || `${newKeyword} Implementation Playbook`,
+        platform: newPlatform,
+        targetKeyword: newKeyword || 'AI Marketing OS'
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.item) {
           if (data.state && onStateSynced) {
             onStateSynced(data.state);

@@ -111,6 +111,17 @@ import {
   renderHeyGenAvatarVideo,
   getHeyGenVideoStatus
 } from './src/aiMediaEngine';
+import {
+  authenticateToken,
+  authorizeRoles,
+  resolveUserEmail,
+  sanitizeInput,
+  isValidEmail,
+  JWT_SECRET,
+  DEFAULT_ADMIN_EMAIL
+} from './src/middleware/auth.middleware';
+import { createAuthRouter } from './src/routes/auth.routes';
+import { createStateRouter } from './src/routes/state.routes';
 
 dotenv.config();
 
@@ -314,85 +325,8 @@ type MarketingOsDb = ReturnType<typeof createInitialDb>;
 let db: MarketingOsDb = createInitialDb();
 
 const BELAL_EMAIL = 'csebelal9@gmail.com';
-const DEFAULT_ADMIN_EMAIL = 'support@serpely.com';
-const JWT_SECRET = process.env.JWT_SECRET || 'sincly-enterprise-jwt-super-secret-key-2026';
 
 const activeUserWorkspaces = new Map<string, MarketingOsDb>();
-
-function resolveUserEmail(req: express.Request): string {
-  // 1. Authenticated user attached by JWT middleware
-  if ((req as any).user?.email) {
-    return String((req as any).user.email).trim().toLowerCase();
-  }
-  // 2. Direct Bearer token check
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    try {
-      const decoded: any = jwt.verify(authHeader.substring(7), JWT_SECRET);
-      if (decoded?.email) return String(decoded.email).trim().toLowerCase();
-    } catch {}
-  }
-  // 3. Request Header
-  const headerEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
-  if (headerEmail) return headerEmail;
-  // 4. Query param
-  const queryEmail = (req.query.userEmail as string || '').trim().toLowerCase();
-  if (queryEmail) return queryEmail;
-  // 5. Body param
-  const bodyEmail = (req.body?.userEmail as string || '').trim().toLowerCase();
-  if (bodyEmail) return bodyEmail;
-  return DEFAULT_ADMIN_EMAIL;
-}
-
-function authenticateToken(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const authHeader = req.headers.authorization;
-  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
-  if (!token && req.headers['x-access-token']) {
-    token = req.headers['x-access-token'] as string;
-  }
-
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as any;
-      (req as any).user = decoded;
-      req.headers['x-user-email'] = decoded.email;
-      return next();
-    } catch (err: any) {
-      return res.status(401).json({ error: 'Session expired or invalid authentication token. Please sign in again.' });
-    }
-  }
-
-  // Graceful fallback for x-user-email header on trusted calls
-  const headerEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
-  if (headerEmail) {
-    (req as any).user = { email: headerEmail, role: 'owner' };
-    return next();
-  }
-
-  return res.status(401).json({ error: 'Authentication required. Please sign in.' });
-}
-
-function authorizeRoles(...allowedRoles: string[]) {
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const userRole = (req as any).user?.role || 'owner';
-    if (!allowedRoles.includes(userRole)) {
-      return res.status(403).json({ error: `Forbidden: role '${userRole}' lacks permission for this action.` });
-    }
-    next();
-  };
-}
-
-function sanitizeInput(val: unknown): string {
-  if (typeof val !== 'string') return '';
-  return val
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/[<>]/g, '')
-    .trim();
-}
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
 
 function getUserWorkspace(userEmail: string): MarketingOsDb {
   const email = (userEmail || '').trim().toLowerCase() || DEFAULT_ADMIN_EMAIL;
@@ -984,64 +918,17 @@ async function startServer() {
   };
 
   // ============================================================================
-  // 0. Server-Side SQL State Synchronization Endpoints (User-Scoped)
+  // 0. Server-Side SQL State Synchronization Endpoints (Modular State Router)
   // ============================================================================
-  app.get('/api/state', (req, res) => {
-    const userEmail = resolveUserEmail(req);
-    const userDb = getUserWorkspace(userEmail);
-    const filteredPages = (userDb.connectedPages || []).filter(p => {
-      if (!p.ownerEmail) return userEmail === BELAL_EMAIL || userEmail === DEFAULT_ADMIN_EMAIL;
-      return p.ownerEmail.toLowerCase() === userEmail;
-    });
-    res.json({ ...userDb, connectedPages: filteredPages });
-  });
-
-  app.put('/api/state', async (req, res) => {
-    const userEmail = resolveUserEmail(req);
-    const userDb = getUserWorkspace(userEmail);
-    const updates = req.body || {};
-    const allowedKeys: (keyof MarketingOsDb)[] = [
-      'brandProfile',
-      'agents',
-      'approvals',
-      'geoScore',
-      'campaigns',
-      'contentList',
-      'socialPosts',
-      'emailCampaigns',
-      'emailSequences',
-      'leads',
-      'communityMessages',
-      'automations',
-      'integrations',
-      'memories',
-      'connectedPages',
-      'pagePosts',
-      'reports',
-      'webhookConfig',
-      'webhookLogs',
-      'scheduledQueue',
-      'meetings',
-      'messagingConfig'
-    ];
-    for (const key of allowedKeys) {
-      if (updates[key] !== undefined) {
-        (userDb as any)[key] = updates[key];
-      }
-    }
-    await saveUserWorkspace(userEmail, userDb);
-    res.json({ success: true, state: userDb });
-  });
-
-  app.post('/api/state/reset', async (req, res) => {
-    const userEmail = resolveUserEmail(req);
-    const userDb = getUserWorkspace(userEmail);
-    const preservedOAuth = userDb.oauthSessions;
-    const freshDb = createInitialDb();
-    freshDb.oauthSessions = preservedOAuth;
-    await saveUserWorkspace(userEmail, freshDb);
-    res.json({ success: true, state: freshDb });
-  });
+  app.use(
+    '/api/state',
+    createStateRouter({
+      getUserWorkspace,
+      saveUserWorkspace,
+      createInitialDb,
+      adminEmails: [BELAL_EMAIL, DEFAULT_ADMIN_EMAIL]
+    })
+  );
 
   // ============================================================================
   // 0B. Native Model Context Protocol (MCP) Server (Claude, Cursor, Windsurf)
@@ -2080,174 +1967,18 @@ async function startServer() {
   });
 
   // --------------------------------------------------------------------------
-  // User Registration Endpoint (PostgreSQL + bcrypt + JWT)
+  // User Authentication Router (PostgreSQL + bcrypt + JWT)
   // --------------------------------------------------------------------------
-  app.post('/api/auth/register', async (req, res) => {
-    try {
-      const { name, email, password, role = 'owner', title = 'Workspace Owner', initials } = req.body || {};
-      const cleanEmail = String(email || '').trim().toLowerCase();
-      const cleanPassword = String(password || '').trim();
-      const cleanName = sanitizeInput(name) || cleanEmail.split('@')[0];
-
-      if (!cleanEmail || !isValidEmail(cleanEmail)) {
-        return res.status(400).json({ success: false, error: 'Valid email address is required.' });
+  app.use(
+    '/api/auth',
+    createAuthRouter({
+      createInitialWorkspace: createInitialDb,
+      onUserWorkspaceCreated: async (email, initialDb) => {
+        activeUserWorkspaces.set(email, initialDb);
+        await saveUserWorkspace(email, initialDb);
       }
-      if (!cleanPassword || cleanPassword.length < 6) {
-        return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
-      }
-
-      // Check if user already exists
-      const existingUser = await findUserByEmail(cleanEmail);
-      if (existingUser) {
-        return res.status(409).json({
-          success: false,
-          error: 'An account with this email already exists. Please sign in instead.'
-        });
-      }
-
-      // Hash password with bcrypt (salt rounds = 10)
-      const passwordHash = await bcrypt.hash(cleanPassword, 10);
-      const userInitials = initials || cleanName.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase() || 'U';
-
-      const newUser = await createUserInDb({
-        id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        name: cleanName,
-        email: cleanEmail,
-        passwordHash,
-        role: String(role || 'owner'),
-        title: String(title || 'Workspace Owner'),
-        initials: userInitials
-      });
-
-      // Initialize clean workspace for user
-      const cleanDb = createInitialDb();
-      activeUserWorkspaces.set(cleanEmail, cleanDb);
-      await saveUserWorkspace(cleanEmail, cleanDb);
-
-      // Sign JWT session token (7-day validity)
-      const token = jwt.sign(
-        { id: newUser.id, email: cleanEmail, role: newUser.role, name: newUser.name },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      // Audit log
-      await recordAuditLog(cleanEmail, 'USER_REGISTER', req.ip, req.headers['user-agent'] as string, {
-        role: newUser.role
-      });
-
-      return res.json({ success: true, token, user: newUser });
-    } catch (err: any) {
-      console.error('[Auth Register Error]:', err);
-      return res.status(500).json({ success: false, error: 'Registration failed due to a server error.' });
-    }
-  });
-
-  // --------------------------------------------------------------------------
-  // User Login Endpoint (PostgreSQL + bcrypt verify + JWT issue)
-  // --------------------------------------------------------------------------
-  app.post('/api/auth/login', async (req, res) => {
-    try {
-      const { email, password } = req.body || {};
-      const cleanEmail = String(email || '').trim().toLowerCase();
-      const cleanPassword = String(password || '').trim();
-
-      if (!cleanEmail || !cleanPassword) {
-        return res.status(400).json({ success: false, error: 'Email and password are required.' });
-      }
-
-      const user = await findUserByEmail(cleanEmail);
-      if (!user) {
-        await recordAuditLog(cleanEmail, 'USER_LOGIN_FAILED', req.ip, req.headers['user-agent'] as string, {
-          reason: 'User not found'
-        });
-        return res.status(401).json({
-          success: false,
-          error: 'No account found with this email. Please click "Sign up now" below to create an account.'
-        });
-      }
-
-      // Verify bcrypt password hash
-      let isMatch = false;
-      const storedPassword = String(user.password || '');
-      if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$')) {
-        isMatch = await bcrypt.compare(cleanPassword, storedPassword);
-      } else {
-        // Fallback for plain-text password match and auto-upgrade to bcrypt hash
-        isMatch = (cleanPassword === storedPassword);
-        if (isMatch) {
-          const newHash = await bcrypt.hash(cleanPassword, 10);
-          user.password = newHash;
-          await writeUserToSql(user);
-        }
-      }
-
-      if (!isMatch) {
-        await recordAuditLog(cleanEmail, 'USER_LOGIN_FAILED', req.ip, req.headers['user-agent'] as string, {
-          reason: 'Invalid credentials'
-        });
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid password. Please verify your credentials and try again.'
-        });
-      }
-
-      // Sign JWT session token (7-day validity)
-      const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role, name: user.name },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-
-      // Audit log
-      await recordAuditLog(cleanEmail, 'USER_LOGIN_SUCCESS', req.ip, req.headers['user-agent'] as string, {
-        role: user.role
-      });
-
-      // Strip sensitive password before returning to client
-      const { password: _, ...safeUser } = user;
-      return res.json({ success: true, token, user: safeUser });
-    } catch (err: any) {
-      console.error('[Auth Login Error]:', err);
-      return res.status(500).json({ success: false, error: 'Login failed due to a server error.' });
-    }
-  });
-
-  // --------------------------------------------------------------------------
-  // User Session Verification (/api/auth/me)
-  // --------------------------------------------------------------------------
-  app.get('/api/auth/me', async (req, res) => {
-    try {
-      const email = resolveUserEmail(req);
-      if (!email) {
-        return res.status(401).json({ authenticated: false });
-      }
-      const user = await findUserByEmail(email);
-      if (!user) {
-        return res.status(401).json({ authenticated: false });
-      }
-      const { password: _, ...safeUser } = user;
-      return res.json({ authenticated: true, user: safeUser });
-    } catch (err: any) {
-      return res.status(500).json({ authenticated: false, error: err?.message });
-    }
-  });
-
-  // --------------------------------------------------------------------------
-  // Get Registered Users (Sanitized, no passwords exposed)
-  // --------------------------------------------------------------------------
-  app.get('/api/auth/users', async (_req, res) => {
-    try {
-      const users = await readAllUsersFromSql();
-      const sanitized = users.map(u => {
-        const { password, ...safe } = u;
-        return safe;
-      });
-      res.json({ success: true, users: sanitized });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message });
-    }
-  });
+    })
+  );
 
   // --------------------------------------------------------------------------
   // Audit Logs Endpoint (Protected, Admin Only)

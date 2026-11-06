@@ -11,6 +11,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { AgentInfo, AgentId, ViewId } from '../../types';
+import { apiClient } from '../../services/apiClient';
 
 interface AgentsViewProps {
   agents: AgentInfo[];
@@ -184,16 +185,12 @@ export const AgentsView: React.FC<AgentsViewProps> = ({
     setRunningTaskId(agent.id);
 
     try {
-      const res = await fetch('/api/agents/run-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId: agent.id,
-          taskPrompt: promptToRun
-        })
+      const res = await apiClient.post('/api/agents/run-task', {
+        agentId: agent.id,
+        taskPrompt: promptToRun
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.state && onStateSynced) {
           onStateSynced(data.state);
         }

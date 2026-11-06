@@ -14,6 +14,7 @@ import {
   Check
 } from 'lucide-react';
 import { SocialPagePlatform } from '../../types';
+import { apiClient } from '../../services/apiClient';
 
 interface ViralityBreakdown {
   hookScore: number;
@@ -71,19 +72,14 @@ export const ViralityPredictorMeter: React.FC<ViralityPredictorMeterProps> = ({
 
     setIsLoading(true);
     try {
-      const res = await fetch('/api/social/predict-virality', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform: currentPlatform,
-          content: text,
-          hashtags
-        })
+      const res = await apiClient.post('/api/social/predict-virality', {
+        platform: currentPlatform,
+        content: text,
+        hashtags
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setPrediction(data);
+      if (res.success && res.data) {
+        setPrediction(res.data);
       }
     } catch {
       // ignore network errors

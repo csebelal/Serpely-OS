@@ -33,6 +33,7 @@ import {
   SocialPagePlatform,
   ScheduledSocialPost
 } from '../../types';
+import { apiClient } from '../../services/apiClient';
 import { AuthUser } from '../../data/rbac-data';
 import { EmptyState } from '../common/EmptyState';
 import { ThreadsIcon, BlueskyIcon, TikTokIcon, PinterestIcon } from '../social/SocialPlatformIcons';
@@ -129,9 +130,9 @@ export const SocialView: React.FC<SocialViewProps> = ({
     try {
       const userEmail = currentUser?.email || '';
       const endpoint = `/api/auth/linkedin/url?mode=personal&userEmail=${encodeURIComponent(userEmail)}&origin=${encodeURIComponent(window.location.origin)}`;
-      const res = await fetch(endpoint);
-      if (res.ok) {
-        const data = await res.json();
+      const res = await apiClient.get(endpoint);
+      if (res.success && res.data) {
+        const data = res.data;
         if (data.url && !data.sandboxMode) {
           const popup = window.open(data.url, 'linkedin_oauth_popup', 'width=620,height=720');
           if (popup) {
@@ -156,9 +157,9 @@ export const SocialView: React.FC<SocialViewProps> = ({
     const handleAuthData = (data: any) => {
       if (data?.type === 'OAUTH_AUTH_SUCCESS' && data.provider === 'LinkedIn') {
         showNotification(`🎉 Connected LinkedIn: ${data.pageName || 'Personal Profile'}!`);
-        fetch(`/api/state?userEmail=${encodeURIComponent(currentUser?.email || '')}`)
-          .then(r => (r.ok ? r.json() : null))
-          .then(state => {
+        apiClient.get('/api/state')
+          .then(res => {
+            const state = res.data;
             if (state?.connectedPages && onUpdateConnectedPages) {
               onUpdateConnectedPages(state.connectedPages);
             }
@@ -235,11 +236,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
       onSubmitApproval(item);
     }
     try {
-      fetch('/api/approvals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item)
-      }).catch(() => {});
+      apiClient.post('/api/approvals', item).catch(() => {});
     } catch {
       // Handled via state
     }
@@ -283,8 +280,8 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
   const fetchScheduledQueue = async () => {
     try {
-      const res = await fetch('/api/social/scheduling/queue');
-      const data = await res.json();
+      const res = await apiClient.get('/api/social/scheduling/queue');
+      const data = res.data;
       if (data?.queue) {
         setScheduledQueue(data.queue);
       }
@@ -302,8 +299,8 @@ export const SocialView: React.FC<SocialViewProps> = ({
   const handleDispatchScheduledNow = async (id: string) => {
     setIsDispatchingId(id);
     try {
-      const res = await fetch(`/api/social/scheduling/${id}/dispatch`, { method: 'POST' });
-      const data = await res.json();
+      const res = await apiClient.post(`/api/social/scheduling/${id}/dispatch`);
+      const data = res.data;
       if (data?.success) {
         showNotification(`Dispatched post live via ${data.platform || 'Direct Connector'}! URL: ${data.externalPostUrl || 'Feed'}`);
         if (data.pagePosts && onUpdatePagePosts) {
@@ -311,7 +308,7 @@ export const SocialView: React.FC<SocialViewProps> = ({
         }
         fetchScheduledQueue();
       } else {
-        showNotification(`Dispatch failed: ${data.error || 'Connector error'}`);
+        showNotification(`Dispatch failed: ${data?.error || res.error || 'Connector error'}`);
       }
     } catch (err: any) {
       showNotification(`Dispatch error: ${err.message}`);
@@ -322,8 +319,8 @@ export const SocialView: React.FC<SocialViewProps> = ({
 
   const handleCancelScheduled = async (id: string) => {
     try {
-      const res = await fetch(`/api/social/scheduling/${id}`, { method: 'DELETE' });
-      const data = await res.json();
+      const res = await apiClient.delete(`/api/social/scheduling/${id}`);
+      const data = res.data;
       if (data?.success) {
         showNotification('Scheduled post cancelled successfully.');
         fetchScheduledQueue();
