@@ -1,4 +1,4 @@
-// Global fetch wrapper with automatic user-scoped header injection & extension compatibility
+// Global fetch wrapper with automatic JWT & user-scoped header injection & extension compatibility
 if (typeof window !== 'undefined') {
   try {
     const originalFetch = window.fetch;
@@ -6,23 +6,32 @@ if (typeof window !== 'undefined') {
       ? function (this: any, input: RequestInfo | URL, init?: RequestInit) {
           try {
             let userEmail = '';
-            const saved = localStorage.getItem('serpely_authenticated_user');
-            if (saved) {
-              try {
+            let authToken = '';
+            try {
+              authToken = localStorage.getItem('serpely_auth_token') || '';
+              const saved = localStorage.getItem('serpely_authenticated_user');
+              if (saved) {
                 const parsed = JSON.parse(saved);
                 userEmail = (parsed?.email || '').trim().toLowerCase();
-              } catch {}
-            }
-            if (userEmail) {
+              }
+            } catch {}
+
+            if (userEmail || authToken) {
               if (typeof input === 'string' || input instanceof URL) {
                 const headers = new Headers(init?.headers || {});
-                if (!headers.has('x-user-email')) {
+                if (userEmail && !headers.has('x-user-email')) {
                   headers.set('x-user-email', userEmail);
+                }
+                if (authToken && !headers.has('Authorization')) {
+                  headers.set('Authorization', `Bearer ${authToken}`);
                 }
                 init = { ...init, headers };
               } else if (typeof Request !== 'undefined' && input instanceof Request) {
-                if (!input.headers.has('x-user-email')) {
+                if (userEmail && !input.headers.has('x-user-email')) {
                   input.headers.set('x-user-email', userEmail);
+                }
+                if (authToken && !input.headers.has('Authorization')) {
+                  input.headers.set('Authorization', `Bearer ${authToken}`);
                 }
               }
             }

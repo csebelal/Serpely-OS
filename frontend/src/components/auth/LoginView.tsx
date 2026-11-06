@@ -44,109 +44,136 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setConfirmPassword('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      if (isSignUp) {
-        // --- SIGN UP LOGIC ---
-        const cleanEmail = email.trim().toLowerCase();
-        const cleanPassword = password.trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
 
-        if (!cleanEmail) {
-          setErrorMessage('Please provide an email address.');
-          setIsSubmitting(false);
-          return;
-        }
-        if (!cleanPassword) {
-          setErrorMessage('Please provide a password.');
-          setIsSubmitting(false);
-          return;
-        }
-        if (cleanPassword.length < 6) {
-          setErrorMessage('Password must be at least 6 characters.');
-          setIsSubmitting(false);
-          return;
-        }
-        if (cleanPassword !== confirmPassword.trim()) {
-          setErrorMessage('Passwords do not match. Please re-type your password.');
-          setIsSubmitting(false);
-          return;
-        }
+    if (!cleanEmail) {
+      setErrorMessage('Please provide an email address.');
+      setIsSubmitting(false);
+      return;
+    }
+    if (!cleanPassword) {
+      setErrorMessage('Please provide a password.');
+      setIsSubmitting(false);
+      return;
+    }
 
-        const initials = (name.trim() || cleanEmail)
-          .split(' ')
-          .map(w => w[0])
-          .slice(0, 2)
-          .join('')
-          .toUpperCase() || 'SU';
+    if (isSignUp) {
+      // --- SIGN UP LOGIC (POST /api/auth/register) ---
+      if (cleanPassword.length < 6) {
+        setErrorMessage('Password must be at least 6 characters.');
+        setIsSubmitting(false);
+        return;
+      }
+      if (cleanPassword !== confirmPassword.trim()) {
+        setErrorMessage('Passwords do not match. Please re-type your password.');
+        setIsSubmitting(false);
+        return;
+      }
 
-        const newUser: RegisteredUserRecord = {
-          id: `usr-signup-${Date.now()}`,
-          name: name.trim() || 'Workspace Member',
-          email: cleanEmail,
-          password: cleanPassword,
-          role: 'owner',
-          title: 'Workspace Owner',
-          initials,
-          isCustom: true,
-          permissions: {
-            canManageSettings: true,
-            canManageApiKeys: true,
-            canApproveSpends: true,
-            canCreateAssets: true,
-            canPublishLive: true,
-            isReadOnly: false
-          }
-        };
-
-        saveCustomUser(newUser);
-
-        // Register user and initialize isolated workspace on backend
-        fetch('/api/auth/register', {
+      try {
+        const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newUser)
-        }).catch(err => console.warn('[Auth] Backend user registration sync:', err));
-
-        if (rememberMe) {
-          try {
-            localStorage.setItem('serpely_authenticated_user', JSON.stringify(newUser));
-            localStorage.setItem('serpely_active_role', newUser.role);
-          } catch {}
-        }
-
-        onLogin(newUser);
-        setIsSubmitting(false);
-      } else {
-        // --- SIGN IN LOGIC ---
-        const authResult = authenticateCredentials(email, password);
-
-        if (!authResult.success || !authResult.user) {
-          setErrorMessage(
-            authResult.error ||
-              'Invalid credentials. Please verify your email and password.'
-          );
+          body: JSON.stringify({
+            name: name.trim() || cleanEmail.split('@')[0],
+            email: cleanEmail,
+            password: cleanPassword,
+            role: 'owner'
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          setErrorMessage(data.error || 'Registration failed. Please try again.');
           setIsSubmitting(false);
           return;
         }
 
-        const authenticatedUser = authResult.user;
-
-        if (rememberMe) {
+        const registeredUser = data.user;
+        if (data.token) {
           try {
-            localStorage.setItem('serpely_authenticated_user', JSON.stringify(authenticatedUser));
-            localStorage.setItem('serpely_active_role', authenticatedUser.role);
+            localStorage.setItem('serpely_auth_token', data.token);
           } catch {}
         }
+        try {
+          localStorage.setItem('serpely_authenticated_user', JSON.stringify(registeredUser));
+          localStorage.setItem('serpely_active_role', registeredUser.role);
+          saveCustomUser(registeredUser);
+        } catch {}
 
-        onLogin(authenticatedUser);
+        onLogin(registeredUser);
+      } catch (err: any) {
+        setErrorMessage(err?.message || 'Network error connecting to auth server.');
+      } finally {
         setIsSubmitting(false);
       }
-    }, 380);
+    } else {
+      // --- SIGN IN LOGIC (POST /api/auth/login) ---
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password: cleanPassword
+          })
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          // Fallback to local offline credentials if network/backend is unreachable
+          const fallback = authenticateCredentials(cleanEmail, cleanPassword);
+          if (fallback.success && fallback.user) {
+            if (rememberMe) {
+              try {
+                localStorage.setItem('serpely_authenticated_user', JSON.stringify(fallback.user));
+                localStorage.setItem('serpely_active_role', fallback.user.role);
+              } catch {}
+            }
+            onLogin(fallback.user);
+            return;
+          }
+          setErrorMessage(data.error || 'Invalid credentials. Please verify your email and password.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const authenticatedUser = data.user;
+        if (data.token) {
+          try {
+            localStorage.setItem('serpely_auth_token', data.token);
+          } catch {}
+        }
+        try {
+          localStorage.setItem('serpely_authenticated_user', JSON.stringify(authenticatedUser));
+          localStorage.setItem('serpely_active_role', authenticatedUser.role);
+        } catch {}
+
+        onLogin(authenticatedUser);
+      } catch (err: any) {
+        // Fallback to local offline credentials if offline
+        const fallback = authenticateCredentials(cleanEmail, cleanPassword);
+        if (fallback.success && fallback.user) {
+          if (rememberMe) {
+            try {
+              localStorage.setItem('serpely_authenticated_user', JSON.stringify(fallback.user));
+              localStorage.setItem('serpely_active_role', fallback.user.role);
+            } catch {}
+          }
+          onLogin(fallback.user);
+          return;
+        }
+        setErrorMessage(err?.message || 'Failed to connect to authentication service.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
   };
 
   return (

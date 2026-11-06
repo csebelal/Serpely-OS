@@ -302,6 +302,8 @@ export const AppShell: React.FC = () => {
   const handleLogout = () => {
     try {
       localStorage.removeItem('serpely_authenticated_user');
+      localStorage.removeItem('serpely_auth_token');
+      localStorage.removeItem('serpely_active_role');
     } catch {}
     setIsAuthScreenOpen(true);
     if (typeof window !== 'undefined') {

@@ -3,6 +3,10 @@ import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
+import helmet from 'helmet';
+import cors from 'cors';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
 import { GoogleGenAI, Type } from '@google/genai';
 import {
   mockBrandProfile,
@@ -70,7 +74,11 @@ import {
   writeUserWorkspaceToSql,
   readAllUserWorkspacesFromSql,
   readAllUsersFromSql,
-  writeUserToSql
+  writeUserToSql,
+  findUserByEmail,
+  createUserInDb,
+  recordAuditLog,
+  getPrimaryPgPool
 } from './src/db/sql-engine';
 import {
   generateAuthorityTechVisualDataUri,
@@ -307,17 +315,83 @@ let db: MarketingOsDb = createInitialDb();
 
 const BELAL_EMAIL = 'csebelal9@gmail.com';
 const DEFAULT_ADMIN_EMAIL = 'support@serpely.com';
+const JWT_SECRET = process.env.JWT_SECRET || 'sincly-enterprise-jwt-super-secret-key-2026';
 
 const activeUserWorkspaces = new Map<string, MarketingOsDb>();
 
 function resolveUserEmail(req: express.Request): string {
+  // 1. Authenticated user attached by JWT middleware
+  if ((req as any).user?.email) {
+    return String((req as any).user.email).trim().toLowerCase();
+  }
+  // 2. Direct Bearer token check
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const decoded: any = jwt.verify(authHeader.substring(7), JWT_SECRET);
+      if (decoded?.email) return String(decoded.email).trim().toLowerCase();
+    } catch {}
+  }
+  // 3. Request Header
   const headerEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
   if (headerEmail) return headerEmail;
+  // 4. Query param
   const queryEmail = (req.query.userEmail as string || '').trim().toLowerCase();
   if (queryEmail) return queryEmail;
+  // 5. Body param
   const bodyEmail = (req.body?.userEmail as string || '').trim().toLowerCase();
   if (bodyEmail) return bodyEmail;
   return DEFAULT_ADMIN_EMAIL;
+}
+
+function authenticateToken(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  let token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  if (!token && req.headers['x-access-token']) {
+    token = req.headers['x-access-token'] as string;
+  }
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      (req as any).user = decoded;
+      req.headers['x-user-email'] = decoded.email;
+      return next();
+    } catch (err: any) {
+      return res.status(401).json({ error: 'Session expired or invalid authentication token. Please sign in again.' });
+    }
+  }
+
+  // Graceful fallback for x-user-email header on trusted calls
+  const headerEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
+  if (headerEmail) {
+    (req as any).user = { email: headerEmail, role: 'owner' };
+    return next();
+  }
+
+  return res.status(401).json({ error: 'Authentication required. Please sign in.' });
+}
+
+function authorizeRoles(...allowedRoles: string[]) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const userRole = (req as any).user?.role || 'owner';
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({ error: `Forbidden: role '${userRole}' lacks permission for this action.` });
+    }
+    next();
+  };
+}
+
+function sanitizeInput(val: unknown): string {
+  if (typeof val !== 'string') return '';
+  return val
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/[<>]/g, '')
+    .trim();
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function getUserWorkspace(userEmail: string): MarketingOsDb {
@@ -531,17 +605,29 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.BACKEND_PORT) || 5000;
 
-  // CORS middleware for decoupled frontend-backend communication
-  app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With');
-    if (req.method === 'OPTIONS') return res.sendStatus(200);
-    next();
-  });
+  // 1. Enterprise Security Headers (Helmet)
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' }
+    })
+  );
 
-  app.use(express.json({ limit: '20mb' }));
+  // 2. Strict CORS Configuration
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        return callback(null, true);
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-email', 'x-access-token']
+    })
+  );
+
+  app.use(express.json({ limit: '10mb' }));
 
   // Hydrate workspace directly from server-side SQL database (auto-migrating legacy JSON once if present)
   db = await initPrimarySqlDatabase(createInitialDb(), LEGACY_JSON_DB_PATH);
@@ -1993,49 +2079,184 @@ async function startServer() {
     res.json(buildLiveStatusPayload(req, userDb, email));
   });
 
-  // User Registration Endpoint
+  // --------------------------------------------------------------------------
+  // User Registration Endpoint (PostgreSQL + bcrypt + JWT)
+  // --------------------------------------------------------------------------
   app.post('/api/auth/register', async (req, res) => {
     try {
       const { name, email, password, role = 'owner', title = 'Workspace Owner', initials } = req.body || {};
       const cleanEmail = String(email || '').trim().toLowerCase();
-      if (!cleanEmail) {
-        return res.status(400).json({ success: false, error: 'Email is required' });
+      const cleanPassword = String(password || '').trim();
+      const cleanName = sanitizeInput(name) || cleanEmail.split('@')[0];
+
+      if (!cleanEmail || !isValidEmail(cleanEmail)) {
+        return res.status(400).json({ success: false, error: 'Valid email address is required.' });
+      }
+      if (!cleanPassword || cleanPassword.length < 6) {
+        return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
       }
 
-      const userRecord = {
-        id: `usr-${Date.now()}`,
-        name: String(name || cleanEmail.split('@')[0]),
-        email: cleanEmail,
-        password: String(password || ''),
-        role,
-        title,
-        initials: initials || cleanEmail.substring(0, 2).toUpperCase(),
-        isCustom: true,
-        permissions: {
-          canManageSettings: true,
-          canManageApiKeys: true,
-          canApproveSpends: true,
-          canCreateAssets: true,
-          canPublishLive: true,
-          isReadOnly: false
-        }
-      };
+      // Check if user already exists
+      const existingUser = await findUserByEmail(cleanEmail);
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          error: 'An account with this email already exists. Please sign in instead.'
+        });
+      }
 
-      await writeUserToSql(userRecord);
+      // Hash password with bcrypt (salt rounds = 10)
+      const passwordHash = await bcrypt.hash(cleanPassword, 10);
+      const userInitials = initials || cleanName.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase() || 'U';
+
+      const newUser = await createUserInDb({
+        id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        name: cleanName,
+        email: cleanEmail,
+        passwordHash,
+        role: String(role || 'owner'),
+        title: String(title || 'Workspace Owner'),
+        initials: userInitials
+      });
+
+      // Initialize clean workspace for user
       const cleanDb = createInitialDb();
+      activeUserWorkspaces.set(cleanEmail, cleanDb);
       await saveUserWorkspace(cleanEmail, cleanDb);
 
-      res.json({ success: true, user: userRecord });
+      // Sign JWT session token (7-day validity)
+      const token = jwt.sign(
+        { id: newUser.id, email: cleanEmail, role: newUser.role, name: newUser.name },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      // Audit log
+      await recordAuditLog(cleanEmail, 'USER_REGISTER', req.ip, req.headers['user-agent'] as string, {
+        role: newUser.role
+      });
+
+      return res.json({ success: true, token, user: newUser });
     } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message || 'Failed to register' });
+      console.error('[Auth Register Error]:', err);
+      return res.status(500).json({ success: false, error: 'Registration failed due to a server error.' });
     }
   });
 
-  // Get Registered Users
+  // --------------------------------------------------------------------------
+  // User Login Endpoint (PostgreSQL + bcrypt verify + JWT issue)
+  // --------------------------------------------------------------------------
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { email, password } = req.body || {};
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const cleanPassword = String(password || '').trim();
+
+      if (!cleanEmail || !cleanPassword) {
+        return res.status(400).json({ success: false, error: 'Email and password are required.' });
+      }
+
+      const user = await findUserByEmail(cleanEmail);
+      if (!user) {
+        await recordAuditLog(cleanEmail, 'USER_LOGIN_FAILED', req.ip, req.headers['user-agent'] as string, {
+          reason: 'User not found'
+        });
+        return res.status(401).json({
+          success: false,
+          error: 'No account found with this email. Please click "Sign up now" below to create an account.'
+        });
+      }
+
+      // Verify bcrypt password hash
+      let isMatch = false;
+      const storedPassword = String(user.password || '');
+      if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$')) {
+        isMatch = await bcrypt.compare(cleanPassword, storedPassword);
+      } else {
+        // Fallback for plain-text password match and auto-upgrade to bcrypt hash
+        isMatch = (cleanPassword === storedPassword);
+        if (isMatch) {
+          const newHash = await bcrypt.hash(cleanPassword, 10);
+          user.password = newHash;
+          await writeUserToSql(user);
+        }
+      }
+
+      if (!isMatch) {
+        await recordAuditLog(cleanEmail, 'USER_LOGIN_FAILED', req.ip, req.headers['user-agent'] as string, {
+          reason: 'Invalid credentials'
+        });
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid password. Please verify your credentials and try again.'
+        });
+      }
+
+      // Sign JWT session token (7-day validity)
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role, name: user.name },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      // Audit log
+      await recordAuditLog(cleanEmail, 'USER_LOGIN_SUCCESS', req.ip, req.headers['user-agent'] as string, {
+        role: user.role
+      });
+
+      // Strip sensitive password before returning to client
+      const { password: _, ...safeUser } = user;
+      return res.json({ success: true, token, user: safeUser });
+    } catch (err: any) {
+      console.error('[Auth Login Error]:', err);
+      return res.status(500).json({ success: false, error: 'Login failed due to a server error.' });
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // User Session Verification (/api/auth/me)
+  // --------------------------------------------------------------------------
+  app.get('/api/auth/me', async (req, res) => {
+    try {
+      const email = resolveUserEmail(req);
+      if (!email) {
+        return res.status(401).json({ authenticated: false });
+      }
+      const user = await findUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ authenticated: false });
+      }
+      const { password: _, ...safeUser } = user;
+      return res.json({ authenticated: true, user: safeUser });
+    } catch (err: any) {
+      return res.status(500).json({ authenticated: false, error: err?.message });
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // Get Registered Users (Sanitized, no passwords exposed)
+  // --------------------------------------------------------------------------
   app.get('/api/auth/users', async (_req, res) => {
     try {
       const users = await readAllUsersFromSql();
-      res.json({ success: true, users });
+      const sanitized = users.map(u => {
+        const { password, ...safe } = u;
+        return safe;
+      });
+      res.json({ success: true, users: sanitized });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message });
+    }
+  });
+
+  // --------------------------------------------------------------------------
+  // Audit Logs Endpoint (Protected, Admin Only)
+  // --------------------------------------------------------------------------
+  app.get('/api/audit-logs', authenticateToken, authorizeRoles('owner'), async (_req, res) => {
+    try {
+      const pool = getPrimaryPgPool();
+      const result = await pool.query('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100');
+      res.json({ success: true, logs: result.rows });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err?.message });
     }

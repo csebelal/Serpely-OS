@@ -68,6 +68,8 @@ interface LiveStatusResponse {
     mode: 'live' | 'sandbox';
     clientIdMasked: string | null;
     hasClientSecret: boolean;
+    personalClientIdMasked?: string | null;
+    hasPersonalClientSecret?: boolean;
     hasAccessToken: boolean;
     connected: boolean;
     pageId: string | null;
@@ -83,6 +85,8 @@ interface LiveStatusResponse {
     clientIdMasked: string | null;
     hasClientSecret: boolean;
     apiKeyMasked: string | null;
+    personalClientIdMasked?: string | null;
+    hasPersonalClientSecret?: boolean;
     hasAccessToken: boolean;
     connected: boolean;
     channelId: string | null;
