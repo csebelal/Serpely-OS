@@ -18,6 +18,7 @@ import {
   sanitizeInput,
   isValidEmail
 } from '../middleware/auth.middleware';
+import { authRateLimiter } from '../middleware/rate-limiter.middleware';
 
 export interface AuthRouterOptions {
   createInitialWorkspace?: () => any;
@@ -30,7 +31,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}): Router {
   // --------------------------------------------------------------------------
   // User Registration Endpoint (PostgreSQL + bcrypt + JWT)
   // --------------------------------------------------------------------------
-  router.post('/register', async (req, res) => {
+  router.post('/register', authRateLimiter, async (req, res) => {
     try {
       const { name, email, password, role = 'owner', title = 'Workspace Owner', initials } = req.body || {};
       const cleanEmail = String(email || '').trim().toLowerCase();
@@ -98,7 +99,7 @@ export function createAuthRouter(options: AuthRouterOptions = {}): Router {
   // --------------------------------------------------------------------------
   // User Login Endpoint (PostgreSQL + bcrypt verify + JWT issue)
   // --------------------------------------------------------------------------
-  router.post('/login', async (req, res) => {
+  router.post('/login', authRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body || {};
       const cleanEmail = String(email || '').trim().toLowerCase();

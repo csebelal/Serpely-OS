@@ -122,6 +122,8 @@ import {
 } from './src/middleware/auth.middleware';
 import { createAuthRouter } from './src/routes/auth.routes';
 import { createStateRouter } from './src/routes/state.routes';
+import { createHealthRouter } from './src/routes/health.routes';
+import { createMeetingsRouter } from './src/routes/meetings.routes';
 
 dotenv.config();
 
@@ -918,7 +920,17 @@ async function startServer() {
   };
 
   // ============================================================================
-  // 0. Server-Side SQL State Synchronization Endpoints (Modular State Router)
+  // 0. Health & APM Diagnostics Probe Router
+  // ============================================================================
+  app.use(
+    '/api/health',
+    createHealthRouter({
+      getActiveWorkspacesCount: () => activeUserWorkspaces.size
+    })
+  );
+
+  // ============================================================================
+  // 0A. Server-Side SQL State Synchronization Endpoints (Modular State Router)
   // ============================================================================
   app.use(
     '/api/state',
@@ -8158,126 +8170,15 @@ Return JSON with:
   });
 
   // ============================================================================
-  // 12BA. Meetings & Calls Scheduling Engine Endpoints
+  // 12BA. Meetings & Calls Scheduling Engine (Modular Router)
   // ============================================================================
-  app.get('/api/meetings', (_req, res) => {
-    res.json({ success: true, meetings: db.meetings || [] });
-  });
-
-  app.post('/api/meetings', async (req, res) => {
-    try {
-      const meetingData: Partial<MeetingItem> = req.body || {};
-      const now = new Date();
-      const tomorrow = new Date(now.getTime() + 86400000);
-      const defaultDate = tomorrow.toISOString().split('T')[0];
-
-      const newMeeting: MeetingItem = {
-        id: meetingData.id || `meet-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        title: meetingData.title || 'Client Discovery & Strategy Audit',
-        type: (meetingData.type as MeetingType) || 'strategy_audit',
-        status: (meetingData.status as MeetingStatus) || 'scheduled',
-        platform: (meetingData.platform as MeetingPlatform) || 'google_meet',
-        meetingUrl: meetingData.meetingUrl || `https://meet.google.com/snc-${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 5)}`,
-        scheduledDate: meetingData.scheduledDate || defaultDate,
-        scheduledTime: meetingData.scheduledTime || '03:00 PM',
-        durationMinutes: Number(meetingData.durationMinutes) || 45,
-        timezone: meetingData.timezone || 'Asia/Dhaka (GMT+6)',
-        agenda: meetingData.agenda || 'Omnichannel social and authority pipeline review.',
-        notes: meetingData.notes || '',
-        leadId: meetingData.leadId,
-        clientName: meetingData.clientName || 'Prospective Partner',
-        clientEmail: meetingData.clientEmail || 'partner@enterprise.com',
-        clientCompany: meetingData.clientCompany,
-        clientPhone: meetingData.clientPhone,
-        notifySlack: meetingData.notifySlack ?? true,
-        notifyDiscord: meetingData.notifyDiscord ?? true,
-        notifyEmail: meetingData.notifyEmail ?? true,
-        createdAt: new Date().toISOString()
-      };
-
-      if (!Array.isArray(db.meetings)) {
-        db.meetings = [];
-      }
-      db.meetings.unshift(newMeeting);
-
-      if (newMeeting.leadId && Array.isArray(db.leads)) {
-        const lead = db.leads.find(l => l.id === newMeeting.leadId);
-        if (lead && lead.status === 'qualified') {
-          lead.status = 'contacted';
-        }
-      }
-
-      let notificationResults: any = null;
-      if (db.messagingConfig) {
-        notificationResults = await notifyMeetingScheduled({
-          meeting: newMeeting,
-          brandName: db.brandProfile?.name || 'Sincly Authority Team',
-          slackConfig: db.messagingConfig.slack,
-          discordConfig: db.messagingConfig.discord
-        });
-      }
-
-      saveDb(db);
-      res.json({ success: true, meeting: newMeeting, notificationResults, state: db });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message || 'Failed to schedule meeting' });
-    }
-  });
-
-  app.put('/api/meetings/:id', (req, res) => {
-    try {
-      const { id } = req.params;
-      const updates = req.body || {};
-      if (!Array.isArray(db.meetings)) {
-        db.meetings = [];
-      }
-      const index = db.meetings.findIndex(m => m.id === id);
-      if (index === -1) {
-        return res.status(404).json({ success: false, error: 'Meeting not found' });
-      }
-      db.meetings[index] = { ...db.meetings[index], ...updates };
-      saveDb(db);
-      res.json({ success: true, meeting: db.meetings[index], state: db });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message || 'Failed to update meeting' });
-    }
-  });
-
-  app.delete('/api/meetings/:id', (req, res) => {
-    try {
-      const { id } = req.params;
-      if (!Array.isArray(db.meetings)) {
-        db.meetings = [];
-      }
-      db.meetings = db.meetings.filter(m => m.id !== id);
-      saveDb(db);
-      res.json({ success: true, message: 'Meeting deleted successfully', state: db });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message || 'Failed to delete meeting' });
-    }
-  });
-
-  app.post('/api/meetings/:id/remind', async (req, res) => {
-    try {
-      const { id } = req.params;
-      const meeting = (db.meetings || []).find(m => m.id === id);
-      if (!meeting) {
-        return res.status(404).json({ success: false, error: 'Meeting not found' });
-      }
-
-      const results = await notifyMeetingReminder({
-        meeting,
-        brandName: db.brandProfile?.name || 'Sincly Authority Team',
-        slackConfig: db.messagingConfig?.slack,
-        discordConfig: db.messagingConfig?.discord,
-        minutesBefore: req.body?.minutesBefore || 15
-      });
-
-      res.json({ success: true, results, meeting });
-    } catch (err: any) {
-      res.status(500).json({ success: false, error: err?.message || 'Failed to dispatch reminder' });
-    }
-  });
+  app.use(
+    '/api/meetings',
+    createMeetingsRouter({
+      getUserWorkspace,
+      saveUserWorkspace
+    })
+  );
 
   // ============================================================================
   // 12BB. Slack & Discord Enterprise Messaging Hub Endpoints

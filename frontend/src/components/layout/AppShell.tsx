@@ -32,6 +32,7 @@ import {
 } from '../../data/rbac-data';
 import { LoginView } from '../auth/LoginView';
 import { apiClient } from '../../services/apiClient';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import {
   mockBrandProfile,
   mockAgents,
@@ -955,7 +956,9 @@ export const AppShell: React.FC = () => {
                 transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] as const }}
                 className="w-full p-6 md:p-8"
               >
-                {renderActiveView()}
+                <ErrorBoundary fallbackTitle={`Error rendering ${activeView} view`}>
+                  {renderActiveView()}
+                </ErrorBoundary>
               </motion.div>
             </AnimatePresence>
           )}
