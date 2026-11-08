@@ -405,35 +405,6 @@ export const SocialView: React.FC<SocialViewProps> = ({
         </div>
       </div>
 
-      {/* 1-Click Personal LinkedIn Welcome Banner for logged in users */}
-      {!hasPersonalLinkedIn && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0a66c2]/15 via-blue-950/20 to-neutral-900 border border-[#0a66c2]/35 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-          <div className="flex items-center gap-3.5">
-            <div className="h-10 w-10 rounded-xl bg-[#0a66c2] text-white flex items-center justify-center font-bold shrink-0 shadow-md shadow-[#0a66c2]/30">
-              <Linkedin className="h-5 w-5" />
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                <span>Connect your Personal LinkedIn Profile</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold font-mono">
-                  1-Click Live OAuth
-                </span>
-              </h4>
-              <p className="text-[11px] text-neutral-400 mt-0.5">
-                Publish autonomous executive carousels, thought-leadership posts, and sync comment telemetry directly to your personal LinkedIn feed.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleConnectPersonalLinkedIn}
-            disabled={connectingLinkedIn}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#0a66c2] hover:bg-[#004182] text-white text-xs font-bold shadow-md shadow-[#0a66c2]/30 transition-all shrink-0 active:scale-95 cursor-pointer disabled:opacity-50"
-          >
-            <Linkedin className="h-3.5 w-3.5" />
-            <span>{connectingLinkedIn ? 'Opening...' : 'Connect Now'}</span>
-          </button>
-        </div>
-      )}
 
       {notification && (
         <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center justify-between">
