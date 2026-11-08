@@ -93,4 +93,51 @@ describe('LinkedIn Page Selection and State Routing', () => {
 
     expect(res.status).toBe(404);
   });
+
+  it('preserves genuine user company pages and only purges true mock dummy pages', () => {
+    const rawPages = [
+      { id: 'page-li-org-1', externalPageId: 'urn:li:organization:1', pageName: 'Mock Company' },
+      { id: 'page-li-tech-sheba', externalPageId: 'urn:li:organization:107099137', pageName: 'Tech Sheba' },
+      { id: 'page-li-org-107102427', externalPageId: 'urn:li:organization:107102427', pageName: 'Dongguan Yixin Machinery Co., Ltd' },
+      { id: 'page-li-org-111920179', externalPageId: 'urn:li:organization:111920179', pageName: 'Serpely' },
+      { id: 'page-li-org-109582990', externalPageId: 'urn:li:organization:109582990', pageName: 'BargainByte' },
+      { id: 'page-li-dummy', externalPageId: 'ext-li-syn-1', pageName: 'Synthetic Page' }
+    ];
+
+    const filtered = rawPages.filter(p => {
+      const isDummy = p.id === 'page-li-org-1' ||
+                      p.externalPageId === 'urn:li:organization:1' ||
+                      p.externalPageId === 'ext-li-syn-1';
+      return !isDummy;
+    });
+
+    expect(filtered.length).toBe(4);
+    expect(filtered.map(p => p.pageName)).toEqual([
+      'Tech Sheba',
+      'Dongguan Yixin Machinery Co., Ltd',
+      'Serpely',
+      'BargainByte'
+    ]);
+  });
+
+  it('cleans URL and extracts vanity name for company page linking', () => {
+    const testCases = [
+      { input: 'https://www.linkedin.com/company/tech-sheba/', expected: 'tech-sheba' },
+      { input: 'http://linkedin.com/company/dongguan-yixin-machinery-co-ltd?trk=feed', expected: 'dongguan-yixin-machinery-co-ltd' },
+      { input: 'serpely', expected: 'serpely' },
+      { input: 'urn:li:organization:109582990', expected: '109582990' }
+    ];
+
+    for (const tc of testCases) {
+      let clean = tc.input.trim();
+      if (clean.includes('/company/')) {
+        clean = clean.split('/company/')[1].split('/')[0].split('?')[0];
+      }
+      clean = clean
+        .replace('urn:li:organization:', '')
+        .replace('urn:li:organizationBrand:', '')
+        .trim();
+      expect(clean).toBe(tc.expected);
+    }
+  });
 });
