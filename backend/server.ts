@@ -3935,14 +3935,18 @@ async function startServer() {
 
           const scrapedLiPages: any[] = [];
 
-          // 1. Scrape Organization Pages if using Company App with Community Management API permissions
-          if (!isPersonalApp) {
+          // 1. Scrape Organization Pages if token has ACL / Community Management permissions
+          try {
             const orgPages = await scrapeLinkedInOrganizations(tokenData.access_token, targetEmail);
-            scrapedLiPages.push(...orgPages);
+            if (Array.isArray(orgPages) && orgPages.length > 0) {
+              scrapedLiPages.push(...orgPages);
+            }
+          } catch (scErr) {
+            console.warn('[LinkedIn OAuth] Auto-scrape organizations notice:', scErr);
           }
 
-          // 2. Add Personal Member Profile only if Personal App or user explicitly connected personal profile
-          if (isPersonalApp && sub) {
+          // 2. Add Personal Member Profile if member info is resolved
+          if (sub) {
             const existingLiHandle = targetDb.oauthSessions.linkedin?.pageHandle;
             const liHandleToUse = (existingLiHandle && !existingLiHandle.includes(sub) && existingLiHandle !== `linkedin.com/in/${sub}`)
               ? existingLiHandle
@@ -3967,13 +3971,28 @@ async function startServer() {
             });
           }
 
-          // 3. Mark first page as selected
+          // 3. Mark selected page: retain existing selection if still present, or default to first page
           let activeLi: any = null;
           if (scrapedLiPages.length > 0) {
-            scrapedLiPages.forEach((p, idx) => {
-              p.isSelected = idx === 0;
+            const previouslySelectedId = (targetDb.connectedPages || []).find(
+              (p: any) => p.platform === 'LinkedIn' && p.isSelected
+            )?.externalPageId;
+
+            let foundSelected = false;
+            scrapedLiPages.forEach((p) => {
+              if (previouslySelectedId && p.externalPageId === previouslySelectedId) {
+                p.isSelected = true;
+                foundSelected = true;
+                activeLi = p;
+              } else {
+                p.isSelected = false;
+              }
             });
-            activeLi = scrapedLiPages[0];
+
+            if (!foundSelected) {
+              scrapedLiPages[0].isSelected = true;
+              activeLi = scrapedLiPages[0];
+            }
 
             linkedinSession.pageId = activeLi.externalPageId;
             linkedinSession.authorUrn = activeLi.externalPageId;
@@ -5028,8 +5047,9 @@ Return ONLY valid JSON matching this exact structure:
 
       if (orgPages.length === 0) {
         return res.json({
-          success: false,
-          message: 'No LinkedIn organization pages found with your current account permissions.',
+          success: true,
+          scrapedCount: 0,
+          message: 'No new organization pages discovered via auto-ACL. You can use "+ Link Company Page" to attach any company page by vanity name or URL.',
           connectedPages: userDb.connectedPages
         });
       }

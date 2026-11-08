@@ -156,7 +156,10 @@ export const SocialView: React.FC<SocialViewProps> = ({
   useEffect(() => {
     const handleAuthData = (data: any) => {
       if (data?.type === 'OAUTH_AUTH_SUCCESS' && data.provider === 'LinkedIn') {
-        showNotification(`🎉 Connected LinkedIn: ${data.pageName || 'Personal Profile'}!`);
+        showNotification(`🎉 Connected LinkedIn: ${data.pageName || 'Personal Profile'}! (${data.scrapedCount || 1} target(s) ready)`);
+        if (data.connectedPages && onUpdateConnectedPages) {
+          onUpdateConnectedPages(data.connectedPages);
+        }
         apiClient.get('/api/state')
           .then(res => {
             const state = res.data;

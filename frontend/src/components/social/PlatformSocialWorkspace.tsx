@@ -35,8 +35,11 @@ import {
   ArrowRight,
   LogOut,
   LogIn,
-  ExternalLink as ExternalLinkIcon
+  ExternalLink as ExternalLinkIcon,
+  Plus,
+  Users
 } from 'lucide-react';
+import { apiClient } from '../../services/apiClient';
 import {
   ConnectedSocialPage,
   PageSocialPost,
@@ -207,22 +210,35 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
   };
 
   const [showPageDropdown, setShowPageDropdown] = useState(false);
+  const [isResyncingPages, setIsResyncingPages] = useState(false);
+  const [showAddCompanyModal, setShowAddCompanyModal] = useState(false);
+  const [companyLookupInput, setCompanyLookupInput] = useState('');
+  const [isLookingUpCompany, setIsLookingUpCompany] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close target dropdown when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowPageDropdown(false);
+      }
+    };
+    if (showPageDropdown) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [showPageDropdown]);
 
   // Switch active page for posting & managing
   const handleSelectPage = async (pageId: string) => {
     setShowPageDropdown(false);
     try {
-      const res = await fetch('/api/social/pages/select', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pageId })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.connectedPages) {
-          onUpdateConnectedPages(data.connectedPages);
-        }
-        showToast(`Active posting target switched to: ${data.activePage?.pageName || 'Selected Page'}`);
+      const res = await apiClient.post('/api/social/pages/select', { pageId });
+      if (res.success && res.data?.connectedPages) {
+        onUpdateConnectedPages(res.data.connectedPages);
+        showToast(`Active posting target switched to: ${res.data.activePage?.pageName || 'Selected Page'}`);
         return;
       }
     } catch {
@@ -232,6 +248,50 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
       p.platform === platform ? { ...p, isSelected: p.id === pageId } : p
     );
     onUpdateConnectedPages(updated);
+  };
+
+  // Re-sync all LinkedIn organization pages from API
+  const handleResyncPages = async () => {
+    setIsResyncingPages(true);
+    try {
+      const res = await apiClient.post('/api/social/linkedin/resync-pages');
+      if (res.success && res.data?.connectedPages) {
+        onUpdateConnectedPages(res.data.connectedPages);
+        showToast(res.data.message || 'LinkedIn pages refreshed successfully!');
+      } else {
+        showToast(res.error || res.data?.message || 'Could not resync LinkedIn pages.');
+      }
+    } catch (err: any) {
+      showToast(`Resync error: ${err.message || 'Network failure'}`);
+    } finally {
+      setIsResyncingPages(false);
+    }
+  };
+
+  // Manual company page lookup and link
+  const handleLookupAndAddCompany = async () => {
+    if (!companyLookupInput.trim()) return;
+    setIsLookingUpCompany(true);
+    try {
+      const res = await apiClient.post('/api/social/linkedin/lookup-page', {
+        query: companyLookupInput.trim()
+      });
+      if (res.success && res.data?.connectedPages) {
+        onUpdateConnectedPages(res.data.connectedPages);
+        setShowAddCompanyModal(false);
+        setCompanyLookupInput('');
+        showToast(`Linked company page "${res.data.page?.pageName || 'Company'}"!`);
+        if (res.data.page?.id) {
+          handleSelectPage(res.data.page.id);
+        }
+      } else {
+        alert(res.error || 'Could not find or link this company page. Ensure you are an admin on LinkedIn.');
+      }
+    } catch (err: any) {
+      alert(`Lookup error: ${err.message || 'Failed to connect page'}`);
+    } finally {
+      setIsLookingUpCompany(false);
+    }
   };
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -1347,6 +1407,149 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
             </span>
           </div>
 
+          {/* Active Target Page Dropdown Selector */}
+          <div className="p-3.5 rounded-xl bg-neutral-950/80 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                Target Page:
+              </span>
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowPageDropdown(!showPageDropdown)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-neutral-700/80 text-white text-xs font-semibold transition-all cursor-pointer shadow-sm active:scale-98"
+                >
+                  <div className="h-5 w-5 rounded-full overflow-hidden bg-sky-600/30 flex items-center justify-center shrink-0">
+                    {currentPage.pictureUrl ? (
+                      <img src={currentPage.pictureUrl} alt={currentPage.pageName} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-[10px] font-bold text-sky-400">
+                        {currentPage.accountType === 'personal' ? '👤' : '🏢'}
+                      </span>
+                    )}
+                  </div>
+                  <span className="truncate max-w-[180px] sm:max-w-[240px] font-medium">
+                    {currentPage.pageName}
+                  </span>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-mono ${
+                    currentPage.accountType === 'personal'
+                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}>
+                    {currentPage.accountType === 'personal' ? 'Personal' : 'Company'}
+                  </span>
+                  <ChevronDown className={`h-3.5 w-3.5 text-neutral-400 transition-transform ${showPageDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {showPageDropdown && (
+                  <div className="absolute left-0 top-full mt-2 w-80 sm:w-96 rounded-2xl bg-neutral-900 border border-neutral-700 shadow-2xl z-50 p-2 space-y-1.5 animate-in fade-in duration-150">
+                    <div className="px-3 py-2 border-b border-neutral-800 flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider">
+                        Select {platform} Posting Target
+                      </span>
+                      <span className="text-[10px] text-neutral-500 font-mono">
+                        {platformPages.length} {platformPages.length === 1 ? 'Page' : 'Pages'}
+                      </span>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto space-y-1 py-1">
+                      {platformPages.length === 0 ? (
+                        <div className="p-4 text-center text-xs text-neutral-400">
+                          No connected pages found. Connect your {platform} account to auto-scrape pages.
+                        </div>
+                      ) : (
+                        platformPages.map((page) => (
+                          <button
+                            key={page.id}
+                            type="button"
+                            onClick={() => handleSelectPage(page.id)}
+                            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                              page.id === currentPage.id || page.isSelected
+                                ? 'bg-sky-500/15 border border-sky-500/30 text-white'
+                                : 'hover:bg-neutral-800/80 text-neutral-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="h-8 w-8 rounded-lg overflow-hidden bg-neutral-800 border border-neutral-700 flex items-center justify-center shrink-0">
+                                {page.pictureUrl ? (
+                                  <img src={page.pictureUrl} alt={page.pageName} className="h-full w-full object-cover" />
+                                ) : (
+                                  <span className="text-sm">
+                                    {page.accountType === 'personal' ? '👤' : '🏢'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold truncate flex items-center gap-1.5">
+                                  <span>{page.pageName}</span>
+                                  {page.accountType === 'personal' ? (
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 font-mono">Personal</span>
+                                  ) : (
+                                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono">Company</span>
+                                  )}
+                                </div>
+                                <div className="text-[11px] text-neutral-400 truncate font-mono">
+                                  {page.pageHandle} • {page.followersCount?.toLocaleString() || 0} followers
+                                </div>
+                              </div>
+                            </div>
+                            {(page.id === currentPage.id || page.isSelected) && (
+                              <CheckCircle2 className="h-4 w-4 text-sky-400 shrink-0 ml-2" />
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Footer Actions inside Dropdown */}
+                    <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-2 px-1">
+                      {isLinkedIn && (
+                        <button
+                          type="button"
+                          onClick={handleResyncPages}
+                          disabled={isResyncingPages}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-750 text-[11px] text-neutral-300 font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                          title="Auto-scrape and refresh company pages from LinkedIn API"
+                        >
+                          <RefreshCw className={`h-3 w-3 ${isResyncingPages ? 'animate-spin text-sky-400' : ''}`} />
+                          <span>{isResyncingPages ? 'Resyncing...' : 'Resync Pages'}</span>
+                        </button>
+                      )}
+
+                      {isLinkedIn && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowPageDropdown(false);
+                            setShowAddCompanyModal(true);
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 text-[11px] font-semibold border border-sky-500/30 transition-colors cursor-pointer ml-auto"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Link Company Page</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Followers & Status Indicator */}
+            <div className="flex items-center gap-2 text-xs text-neutral-400">
+              <span className="flex items-center gap-1 font-mono text-[11px]">
+                <Users className="h-3.5 w-3.5 text-neutral-400" />
+                <strong className="text-white font-sans">{currentPage.followersCount?.toLocaleString() || 0}</strong> followers
+              </span>
+              <span className="text-neutral-700">•</span>
+              <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Active Target
+              </span>
+            </div>
+          </div>
+
           {/* Step 1: AI Topic Generator */}
           <div className="space-y-2.5">
             <label className="text-xs font-semibold text-neutral-200 flex items-center gap-1.5">
@@ -2281,6 +2484,66 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
           </div>
         )}
       </div>
+
+      {/* Modal: Link Company Page by Name/URL */}
+      {showAddCompanyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-neutral-900 border border-neutral-800 p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2 text-white font-bold text-sm">
+                <Building2 className="h-4 w-4 text-sky-400" />
+                <span>Link LinkedIn Company Page</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddCompanyModal(false)}
+                className="text-neutral-400 hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              Enter your LinkedIn Company Page vanity slug, URL, or organization ID (e.g. <code className="text-sky-300 bg-neutral-950 px-1 py-0.5 rounded font-mono">tech-sheba</code> or <code className="text-sky-300 bg-neutral-950 px-1 py-0.5 rounded font-mono">https://linkedin.com/company/tech-sheba</code>). Sincly will verify admin rights and add it to your dropdown.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-300">
+                Company Slug, URL or Organization ID
+              </label>
+              <input
+                type="text"
+                value={companyLookupInput}
+                onChange={e => setCompanyLookupInput(e.target.value)}
+                placeholder="e.g. tech-sheba or 107099137"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700 text-white text-xs font-mono focus:border-sky-500 focus:outline-hidden"
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleLookupAndAddCompany();
+                }}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setShowAddCompanyModal(false)}
+                className="px-3.5 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLookupAndAddCompany}
+                disabled={isLookingUpCompany || !companyLookupInput.trim()}
+                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all shadow-md shadow-sky-600/20 active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isLookingUpCompany ? 'animate-spin' : ''}`} />
+                <span>{isLookingUpCompany ? 'Verifying...' : 'Link Page'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
