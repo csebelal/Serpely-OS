@@ -4453,8 +4453,10 @@ async function startServer() {
   // ============================================================================
   // 2. AI Keyword Research -> Post Copy -> Visual Card Config Endpoint
   // ============================================================================
+  // 2A. AI Research & Multi-Draft Content Generation
+  // ============================================================================
   app.post('/api/social/research-and-draft', async (req, res) => {
-    const { keyword, platform = 'LinkedIn' } = req.body || {};
+    const { keyword, platform = 'LinkedIn', tone = 'thought_leadership', postLength = 'standard' } = req.body || {};
     const brand = db.brandProfile;
     const brandName = brand?.name || 'Tech Sheba';
     const brandTagline = brand?.tagline || 'IT Support, Network Infrastructure & Business Solutions';
@@ -4473,34 +4475,40 @@ async function startServer() {
       ? keyword.trim()
       : (knowledgeDocs[0]?.title || `Proactive IT Infrastructure & Support`);
 
+    const cleanTag = targetKeyword.replace(/[^a-zA-Z0-9]/g, '');
+    const cleanBrand = brandName.replace(/[^a-zA-Z0-9]/g, '');
+
+    // Fallback draft variations (Contrarian, 3-Step Framework, Story/Case Lesson)
+    const fallbackDraftContrarian = `Most businesses treat ${targetKeyword} as a routine chore until an outage halts operations.\n\nAt ${brandName}, we see companies lose hours of critical productivity not from lack of effort, but from preventable architecture bottlenecks.\n\nHere is the contrarian truth top IT leaders know:\n\n✦ 24/7 Proactive Monitoring: Detecting latency spikes before office branches notice.\n✦ Automated Failover: Instant secondary gateway routing during peak fiber disruptions.\n✦ Isolated Snapshot Backups: Guaranteed zero-loss disaster recovery within minutes.\n\nTechnology should accelerate your business growth, not create constant daily fires.\n\nHow is your organization auditing its ${targetKeyword} this quarter?\nDrop your thoughts in the comments below.`;
+
+    const fallbackDraftFramework = `A 3-step practical framework to master ${targetKeyword} and ensure 99.9% uptime:\n\n✦ Step 1 — Benchmark & Audit: Identify single points of failure in existing switches and routers.\n✦ Step 2 — Layer Automated Redundancy: Configure seamless dual-WAN load balancing.\n✦ Step 3 — Continuous Telemetry: Track packet health and CCTV throughput in real-time.\n\nReliability isn't accidental. It's engineered.\n\nSave this framework for your next infrastructure review.\nWhat step does your team find most challenging?`;
+
+    const fallbackDraftStory = `Last year, a growing enterprise team came to ${brandName} after their primary system went dark mid-quarter.\n\nThe cost wasn't just downtime—it was lost client trust and frantic after-hours troubleshooting.\n\nWithin 48 hours of deploying unified monitoring and proactive failover, their latency dropped by 80% and unplanned outages fell to zero.\n\nSimple, resilient systems outperform heroic firefighting every single time.\n\nHave you ever faced a sudden infrastructure breakdown? How did your team recover?`;
+
     const ai = getGenAIClient();
 
     if (ai) {
       try {
         const response = await ai.models.generateContent({
           model: 'gemini-3.5-flash',
-          contents: `You are the Lead Social Media Strategist & Research Agent for "${brandName}".
+          contents: `You are the Lead Social Media Strategist & Copywriting Director for "${brandName}".
 Company Tagline/Mission: ${brandTagline}
 Knowledge Hub Verified Services:
 ${knowledgeContext || 'Specializing in Managed IT Services, Office Network Setup, CCTV Security, Cloud Infrastructure, and Business Continuity.'}
 
-Create an authentic, high-converting ${platform} Company Page post specifically grounded in "${brandName}" addressing the topic: "${targetKeyword}".
+Create 3 distinct high-converting ${platform} posts addressing the topic: "${targetKeyword}".
+Post Length Target: ${postLength} (e.g. short=300-500 chars, standard=700-1000 chars, deep_dive=1200+ chars).
+Target Tone: ${tone}.
 
 CRITICAL FORMATTING INSTRUCTIONS (STRICT LINKEDIN POST VIBE):
-- NEVER use markdown bold/italic asterisks (like **bold** or __italic__) or markdown headings (# Heading) anywhere in postContent. LinkedIn cannot render markdown and displays ugly literal asterisks. Write bullet titles cleanly as: "✦ Point Title: Insight" or "✦ POINT TITLE — Insight" without any asterisks.
-- NEVER write the post as a single continuous paragraph or wall of text.
-- Use smart, modern LinkedIn post styling with double line breaks for readability.
-- Structure:
-  1. High-Impact Hook (1-2 lines): Curiosity-inducing or contrarian statement before the fold.
-  2. The Core Problem / Reality (1-2 lines): Why this matters right now.
-  3. Actionable Bulleted Framework (3-4 bullet points): Use "✦ " as bullet markers, with plain capitalized titles (NO asterisks):
-     ✦ Point 1 Title: Brief actionable insight
-     ✦ Point 2 Title: Brief actionable insight
-     ✦ Point 3 Title: Brief actionable insight
-  4. Strategic Takeaway (1 line): Clear business realization.
-  5. Provocative CTA Question (1-2 lines): An engaging question that drives comments and industry discussion.
+- NEVER use markdown bold/italic asterisks (like **bold** or __italic__) or markdown headings (# Heading) anywhere. LinkedIn cannot render markdown and displays ugly literal asterisks. Write bullet titles cleanly as: "✦ Point Title: Insight" or "✦ POINT TITLE — Insight" without any asterisks.
+- Use smart, modern LinkedIn post styling with double line breaks for maximum readability.
+- Generate 3 distinct creative angles:
+  1. draftContrarian: High virality, provocative/curiosity hook, challenges common beliefs, actionable takeaway.
+  2. draftFramework: Step-by-step educational framework, highly savable/shareable format.
+  3. draftStory: Relatable founder/client lesson, real-world scenario, high comment engagement.
 - Mention ${brandName} naturally.
-Return JSON with brief, postContent, hashtags (5 relevant tags), and visualConfig.`,
+Return JSON with brief, drafts, hashtags (5 relevant tags), and visualConfig.`,
           config: {
             responseMimeType: 'application/json',
             responseSchema: {
@@ -4536,6 +4544,15 @@ Return JSON with brief, postContent, hashtags (5 relevant tags), and visualConfi
                     'recommendedAngles'
                   ]
                 },
+                drafts: {
+                  type: Type.OBJECT,
+                  properties: {
+                    contrarian: { type: Type.STRING },
+                    framework: { type: Type.STRING },
+                    story: { type: Type.STRING }
+                  },
+                  required: ['contrarian', 'framework', 'story']
+                },
                 postContent: { type: Type.STRING },
                 hashtags: {
                   type: Type.ARRAY,
@@ -4553,20 +4570,38 @@ Return JSON with brief, postContent, hashtags (5 relevant tags), and visualConfi
                   required: ['headline', 'subheadline', 'metricValue', 'metricLabel', 'keywordTag']
                 }
               },
-              required: ['brief', 'postContent', 'hashtags', 'visualConfig']
+              required: ['brief', 'drafts', 'hashtags', 'visualConfig']
             }
           }
         });
 
         if (response.text) {
           const parsed = JSON.parse(response.text);
-          if (parsed.postContent && typeof parsed.postContent === 'string') {
-            // Strip raw markdown asterisks and heading hashes so LinkedIn post remains clean
-            parsed.postContent = parsed.postContent
-              .replace(/\*\*(.*?)\*\*/g, '$1')
-              .replace(/__(.*?)__/g, '$1')
-              .replace(/^#+\s*/gm, '');
+          const sanitize = (txt: string) => (txt || '')
+            .replace(/\*\*(.*?)\*\*/g, '$1')
+            .replace(/__(.*?)__/g, '$1')
+            .replace(/^#+\s*/gm, '');
+
+          if (parsed.drafts) {
+            parsed.drafts.contrarian = sanitize(parsed.drafts.contrarian);
+            parsed.drafts.framework = sanitize(parsed.drafts.framework);
+            parsed.drafts.story = sanitize(parsed.drafts.story);
+          } else {
+            parsed.drafts = {
+              contrarian: fallbackDraftContrarian,
+              framework: fallbackDraftFramework,
+              story: fallbackDraftStory
+            };
           }
+
+          parsed.postContent = tone === 'contrarian'
+            ? parsed.drafts.contrarian
+            : tone === 'framework'
+            ? parsed.drafts.framework
+            : tone === 'story'
+            ? parsed.drafts.story
+            : sanitize(parsed.postContent || parsed.drafts.contrarian);
+
           parsed.visualConfig.theme =
             platform === 'Facebook' ? 'facebook-cobalt' : 'linkedin-executive';
           parsed.visualConfig.footerBrand = `${brandName} · ${platform.toUpperCase()} DISPATCH`;
@@ -4576,6 +4611,12 @@ Return JSON with brief, postContent, hashtags (5 relevant tags), and visualConfi
         console.error('Gemini research-and-draft error:', err);
       }
     }
+
+    const defaultContent = tone === 'framework'
+      ? fallbackDraftFramework
+      : tone === 'story'
+      ? fallbackDraftStory
+      : fallbackDraftContrarian;
 
     return res.json({
       brief: {
@@ -4591,8 +4632,13 @@ Return JSON with brief, postContent, hashtags (5 relevant tags), and visualConfi
           facebookAngle: 'Practical checklist for small and medium businesses'
         }
       },
-      postContent: `Most businesses don't realize their IT infrastructure is failing until the entire office stops.\n\nAt ${brandName}, we see companies lose hours of critical productivity not from lack of effort, but from preventable network and security bottlenecks.\n\nHere is what keeps resilient modern enterprises running at 100%:\n\n✦ 24/7 Proactive NOC Monitoring: Detecting latency spikes and resolving packet loss before branch offices notice.\n✦ Zero-Latency WAN Failover: Seamless automated routing during peak fiber disruptions.\n✦ Enterprise CCTV Mesh & PBX: Unified remote surveillance with crystal-clear telephony.\n✦ Isolated Snapshot Backups: Guaranteed zero-loss disaster recovery within minutes.\n\nTechnology should accelerate your business growth, not create constant operational headaches.\n\nHow is your organization auditing its infrastructure resilience this quarter?\nDrop your thoughts in the comments below.`,
-      hashtags: ['#TechSheba', '#ITSupport', '#BusinessContinuity', '#ManagedIT', '#BangladeshIT'],
+      postContent: defaultContent,
+      drafts: {
+        contrarian: fallbackDraftContrarian,
+        framework: fallbackDraftFramework,
+        story: fallbackDraftStory
+      },
+      hashtags: [`#${cleanBrand}`, `#${cleanTag || 'ITInfrastructure'}`, '#BusinessContinuity', '#ManagedIT', '#TechLeadership'],
       visualConfig: {
         headline: targetKeyword.slice(0, 50),
         subheadline: `${brandName} Infrastructure Solutions`,
@@ -4603,6 +4649,180 @@ Return JSON with brief, postContent, hashtags (5 relevant tags), and visualConfi
         footerBrand: `${brandName} · ${platform.toUpperCase()} DISPATCH`
       }
     });
+  });
+
+  // ============================================================================
+  // 2B. 1-Click AI Caption Refinement Suite (Hook, Shorten, Expand, CTA, Polish)
+  // ============================================================================
+  app.post('/api/social/ai/refine-caption', async (req, res) => {
+    try {
+      const {
+        content = '',
+        action = 'polish_formatting',
+        targetTone = 'thought_leadership',
+        platform = 'LinkedIn',
+        topic = ''
+      } = req.body || {};
+
+      if (!content || typeof content !== 'string' || !content.trim()) {
+        return res.status(400).json({ success: false, error: 'Caption content is required for refinement.' });
+      }
+
+      const brandName = db.brandProfile?.name || 'Tech Sheba';
+      const cleanContent = content.trim();
+      const ai = getGenAIClient();
+
+      let refinedContent = cleanContent;
+      let actionTaken = action;
+      let hookVariations: string[] = [];
+
+      if (ai) {
+        try {
+          const actionPrompts: Record<string, string> = {
+            rewrite_hook: `Rewrite ONLY the first 1-2 opening lines (the hook before the fold) of the following post. Provide 3 punchy, viral opening hooks that stop people from scrolling, and then return the complete post with the best hook applied.
+Return JSON with:
+- hookVariations: array of 3 distinct opening hook strings
+- refinedContent: the complete post using the strongest hook`,
+
+            shorten: `Rewrite the following post to be 30-40% more concise, punchy, and scannable without losing core value or metrics. Cut fluff and wordiness. Ensure double line breaks.
+Return JSON with:
+- refinedContent: the shortened, high-density post`,
+
+            expand: `Expand the following post with deeper actionable insights, a concrete real-world example, and a 3-bullet framework. Keep it readable with double line breaks.
+Return JSON with:
+- refinedContent: the expanded, high-value post`,
+
+            improve_cta: `Improve the call-to-action (CTA) at the end of the post. Replace weak ending questions with a compelling, high-converting discussion question that genuinely prompts comments and shares from industry professionals.
+Return JSON with:
+- refinedContent: the complete post with the high-converting CTA at the end`,
+
+            polish_formatting: `Clean up the formatting of this post for ${platform}:
+- Ensure clean double line breaks between paragraphs.
+- Use "✦ " for bullet markers.
+- Remove any markdown asterisks (like **bold** or __italic__) or markdown hashtags.
+- Ensure the hook is crisp and clean before the fold.
+Return JSON with:
+- refinedContent: the beautifully formatted post`,
+
+            change_tone: `Rewrite this post in a "${targetTone}" tone. Keep the core insight but adapt the vocabulary, cadence, and vibe accordingly.
+Return JSON with:
+- refinedContent: the adapted post`
+          };
+
+          const prompt = actionPrompts[action] || actionPrompts.polish_formatting;
+
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: `You are an elite LinkedIn/Social Media Copywriter for "${brandName}".
+Action: ${action}.
+Instructions:
+${prompt}
+
+ORIGINAL POST CONTENT:
+"""
+${cleanContent}
+"""
+
+CRITICAL: NEVER use markdown asterisks or headings in the output. Keep it clean plain text ready to paste directly on LinkedIn.`,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  refinedContent: { type: Type.STRING },
+                  hookVariations: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  }
+                },
+                required: ['refinedContent']
+              }
+            }
+          });
+
+          if (response.text) {
+            const data = JSON.parse(response.text);
+            if (data.refinedContent) {
+              refinedContent = data.refinedContent
+                .replace(/\*\*(.*?)\*\*/g, '$1')
+                .replace(/__(.*?)__/g, '$1')
+                .replace(/^#+\s*/gm, '');
+              hookVariations = Array.isArray(data.hookVariations) ? data.hookVariations : [];
+              return res.json({
+                success: true,
+                actionTaken: `Successfully applied: ${action.replace('_', ' ')}`,
+                refinedContent,
+                hookVariations
+              });
+            }
+          }
+        } catch (aiErr) {
+          console.warn('AI refine-caption fallback invoked:', aiErr);
+        }
+      }
+
+      // High-quality deterministic fallback transformations
+      switch (action) {
+        case 'rewrite_hook': {
+          hookVariations = [
+            `90% of companies get ${topic || 'this'} wrong before an incident strikes:`,
+            `Unpopular opinion: Stop patching symptoms and start fixing your core infrastructure:`,
+            `If you only audit one operational bottleneck this quarter, make it this:`
+          ];
+          const lines = cleanContent.split('\n');
+          lines[0] = hookVariations[0];
+          refinedContent = lines.join('\n');
+          actionTaken = 'Upgraded opening hook';
+          break;
+        }
+
+        case 'shorten': {
+          const paragraphs = cleanContent.split('\n\n').filter(Boolean);
+          refinedContent = paragraphs
+            .slice(0, Math.max(2, Math.ceil(paragraphs.length * 0.6)))
+            .join('\n\n');
+          actionTaken = 'Trimmed copy into punchy format';
+          break;
+        }
+
+        case 'expand': {
+          refinedContent = `${cleanContent}\n\n✦ Real-World Benchmark: High-performing teams resolve 85% of edge incidents within 15 minutes of detection.\n✦ Architecture Rule: Never scale manual processes before automating telemetry.`;
+          actionTaken = 'Expanded post with actionable benchmarks';
+          break;
+        }
+
+        case 'improve_cta': {
+          const cta = `\n\nHow is your organization approaching this right now?\nDrop your thoughts and lessons below.`;
+          refinedContent = `${cleanContent.replace(/\n\n(How|What|Drop|Share).*$/s, '')}${cta}`;
+          actionTaken = 'Added conversation-starting CTA';
+          break;
+        }
+
+        case 'polish_formatting':
+        default: {
+          refinedContent = cleanContent
+            .replace(/\*\*(.*?)\*\*/g, '$1')
+            .replace(/__(.*?)__/g, '$1')
+            .replace(/^#+\s*/gm, '')
+            .split('\n')
+            .map(l => l.trim())
+            .filter(Boolean)
+            .join('\n\n');
+          actionTaken = 'Cleaned formatting and line spacing';
+          break;
+        }
+      }
+
+      return res.json({
+        success: true,
+        actionTaken,
+        refinedContent,
+        hookVariations
+      });
+    } catch (err: any) {
+      console.error('refine-caption error:', err);
+      return res.status(500).json({ success: false, error: err.message || 'Failed to refine caption' });
+    }
   });
 
   // ============================================================================

@@ -37,9 +37,23 @@ import {
   LogIn,
   ExternalLink as ExternalLinkIcon,
   Plus,
-  Users
+  Users,
+  Bold,
+  Italic,
+  Scissors,
+  Flame,
+  BookOpen,
+  Lightbulb,
+  Eye,
+  Type
 } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
+import {
+  toUnicodeBold,
+  toUnicodeItalic,
+  stripMarkdown,
+  getLinkedInFoldStatus
+} from '../../utils/unicodeTextFormatter';
 import {
   ConnectedSocialPage,
   PageSocialPost,
@@ -459,6 +473,18 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
   const [postContent, setPostContent] = useState<string>('');
   const [hashtagsInput, setHashtagsInput] = useState<string>('');
 
+  // AI Post Caption Studio States
+  const [selectedTone, setSelectedTone] = useState<'thought_leadership' | 'contrarian' | 'story' | 'framework' | 'quick_tip'>('thought_leadership');
+  const [selectedLength, setSelectedLength] = useState<'short' | 'standard' | 'deep_dive'>('standard');
+  const [multiDrafts, setMultiDrafts] = useState<{ contrarian?: string; framework?: string; story?: string }>({});
+  const [activeDraftTab, setActiveDraftTab] = useState<'contrarian' | 'framework' | 'story' | null>(null);
+  const [isRefining, setIsRefining] = useState(false);
+  const [refiningAction, setRefiningAction] = useState<string | null>(null);
+  const [showHookModal, setShowHookModal] = useState(false);
+  const [hookVariations, setHookVariations] = useState<string[]>([]);
+  const [showFoldPreview, setShowFoldPreview] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const [visualConfig, setVisualConfig] = useState<SocialVisualCardConfig>({
     headline: brandProfile?.name || 'Tech Sheba',
     subheadline: brandProfile?.tagline || 'IT Infrastructure & Security',
@@ -667,7 +693,7 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
     };
   }, [platform, connectedPages, onUpdateConnectedPages]);
 
-  // AI Generate Post + Visual Card
+  // AI Generate Post + Visual Card (Multi-Draft & Tone Aware)
   const handleGenerateWithAI = async (overrideTopic?: string) => {
     const targetTopic = (overrideTopic ?? topicInput).trim();
     if (!targetTopic) return;
@@ -680,7 +706,9 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyword: targetTopic,
-          platform
+          platform,
+          tone: selectedTone,
+          postLength: selectedLength
         })
       });
 
@@ -688,15 +716,25 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
         const data = await res.json();
         if (data.brief && data.postContent && data.visualConfig) {
           setActiveBrief(data.brief);
-          // Sanitize raw markdown asterisks and heading hashes so LinkedIn post remains clean
-          const cleanPostContent = (data.postContent || '')
-            .replace(/\*\*(.*?)\*\*/g, '$1')
-            .replace(/__(.*?)__/g, '$1')
-            .replace(/^#+\s*/gm, '');
+          const cleanPostContent = stripMarkdown(data.postContent || '');
           setPostContent(cleanPostContent);
           setHashtagsInput((data.hashtags || []).join(' '));
           setIsCaptionHighlighted(true);
           setTimeout(() => setIsCaptionHighlighted(false), 3000);
+
+          if (data.drafts) {
+            setMultiDrafts({
+              contrarian: stripMarkdown(data.drafts.contrarian || ''),
+              framework: stripMarkdown(data.drafts.framework || ''),
+              story: stripMarkdown(data.drafts.story || '')
+            });
+            setActiveDraftTab(
+              selectedTone === 'contrarian' ? 'contrarian' :
+              selectedTone === 'framework' ? 'framework' :
+              selectedTone === 'story' ? 'story' : 'contrarian'
+            );
+          }
+
           const derived = deriveVisualConfigFromCaption(cleanPostContent, platform, {
             ...visualConfig,
             ...data.visualConfig,
@@ -707,7 +745,7 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
           });
           setVisualConfig(derived);
           setIsGenerating(false);
-          showToast(`AI generated a fresh ${platform} post with LinkedIn vibe for "${targetTopic}".`);
+          showToast(`Generated 3 creative drafts for "${targetTopic}" (${selectedTone.replace('_', ' ')}).`);
           return;
         }
       }
@@ -715,13 +753,28 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
       // Deterministic fallback below
     }
 
-    // Fast fallback generation
-    const fallbackCopy = isFacebook
-      ? `Are you getting the most out of ${targetTopic}?\n\nWe just reviewed the latest data and found 3 simple changes that make a massive difference:\n\n✦ Focus on clear, actionable takeaways your audience can use today.\n✦ Pair your post with an easy-to-read visual summary card.\n✦ Reply to early comments in the first 30 minutes to boost organic reach.\n\nWhat is your biggest question about ${targetTopic}? Let us know in the comments!`
-      : `Most businesses don't realize their approach to ${targetTopic} is outdated until critical performance drops.\n\nAt ${brandProfile?.name || 'Tech Sheba'}, we analyze where modern organizations lose operational traction.\n\nHere is the 3-step framework that high-performing teams use:\n\n✦ Real-Time Visibility: Proactive monitoring prevents bottlenecks before teams notice.\n✦ Scalable Infrastructure: Automated failover and zero-loss recovery protocols.\n✦ Measurable Execution: Translating technical reliability directly into business continuity.\n\nTechnology should accelerate your growth, not create daily fires.\n\nHow is your organization approaching ${targetTopic} this quarter?\nDrop your thoughts in the comments below.`;
+    // Fast fallback generation with 3 creative angles
+    const fallbackDrafts = {
+      contrarian: `Most businesses treat ${targetTopic} as a routine chore until an outage halts operations.\n\nAt ${brandProfile?.name || 'Tech Sheba'}, we see companies lose hours of critical productivity not from lack of effort, but from preventable architecture bottlenecks.\n\nHere is the contrarian truth top IT leaders know:\n\n✦ 24/7 Proactive Monitoring: Detecting latency spikes before office branches notice.\n✦ Automated Failover: Instant secondary gateway routing during peak fiber disruptions.\n✦ Isolated Snapshot Backups: Guaranteed zero-loss disaster recovery within minutes.\n\nTechnology should accelerate your business growth, not create constant daily fires.\n\nHow is your organization auditing its ${targetTopic} this quarter?\nDrop your thoughts in the comments below.`,
+      framework: `A 3-step practical framework to master ${targetTopic} and ensure 99.9% uptime:\n\n✦ Step 1 — Benchmark & Audit: Identify single points of failure in existing switches and routers.\n✦ Step 2 — Layer Automated Redundancy: Configure seamless dual-WAN load balancing.\n✦ Step 3 — Continuous Telemetry: Track packet health and CCTV throughput in real-time.\n\nReliability isn't accidental. It's engineered.\n\nSave this framework for your next infrastructure review.\nWhat step does your team find most challenging?`,
+      story: `Last year, a growing enterprise team came to ${brandProfile?.name || 'Tech Sheba'} after their primary system went dark mid-quarter.\n\nThe cost wasn't just downtime—it was lost client trust and frantic after-hours troubleshooting.\n\nWithin 48 hours of deploying unified monitoring and proactive failover, their latency dropped by 80% and unplanned outages fell to zero.\n\nSimple, resilient systems outperform heroic firefighting every single time.\n\nHave you ever faced a sudden infrastructure breakdown? How did your team recover?`
+    };
+
+    setMultiDrafts(fallbackDrafts);
+    const chosenDraft = selectedTone === 'framework'
+      ? fallbackDrafts.framework
+      : selectedTone === 'story'
+      ? fallbackDrafts.story
+      : fallbackDrafts.contrarian;
+
+    setActiveDraftTab(
+      selectedTone === 'contrarian' ? 'contrarian' :
+      selectedTone === 'framework' ? 'framework' :
+      selectedTone === 'story' ? 'story' : 'contrarian'
+    );
 
     const cleanTag = targetTopic.replace(/[^a-zA-Z0-9]/g, '');
-    setPostContent(fallbackCopy);
+    setPostContent(chosenDraft);
     setIsCaptionHighlighted(true);
     setTimeout(() => setIsCaptionHighlighted(false), 3000);
     setHashtagsInput(
@@ -730,13 +783,123 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
         : `#${cleanTag || 'B2BGrowth'} #LinkedInStrategy #ThoughtLeadership #MarketingOps`
     );
     setVisualConfig(prev =>
-      deriveVisualConfigFromCaption(fallbackCopy, platform, {
+      deriveVisualConfigFromCaption(chosenDraft, platform, {
         ...prev,
         keywordTag: targetTopic
       })
     );
     setIsGenerating(false);
-    showToast(`Generated ${platform} post & visual card for "${targetTopic}".`);
+    showToast(`Generated 3 creative drafts for "${targetTopic}".`);
+  };
+
+  // Switch between generated multi-draft variations
+  const handleSelectDraft = (draftKey: 'contrarian' | 'framework' | 'story') => {
+    const draftContent = multiDrafts[draftKey];
+    if (draftContent) {
+      setActiveDraftTab(draftKey);
+      setPostContent(draftContent);
+      setIsCaptionHighlighted(true);
+      setTimeout(() => setIsCaptionHighlighted(false), 1500);
+      showToast(`Switched to ${draftKey.toUpperCase()} Draft.`);
+    }
+  };
+
+  // 1-Click AI Refinement Actions (Rewrite Hook, Shorten, Expand, Improve CTA, Polish)
+  const handleRefineCaption = async (action: string) => {
+    if (!postContent.trim()) {
+      showToast('Write or generate a post caption first before refining.');
+      return;
+    }
+    setIsRefining(true);
+    setRefiningAction(action);
+    try {
+      const res = await apiClient.post('/api/social/ai/refine-caption', {
+        content: postContent,
+        action,
+        targetTone: selectedTone,
+        platform,
+        topic: topicInput
+      });
+
+      if (res.success && res.data?.refinedContent) {
+        setPostContent(res.data.refinedContent);
+        setIsCaptionHighlighted(true);
+        setTimeout(() => setIsCaptionHighlighted(false), 2000);
+
+        if (action === 'rewrite_hook' && Array.isArray(res.data.hookVariations) && res.data.hookVariations.length > 0) {
+          setHookVariations(res.data.hookVariations);
+          setShowHookModal(true);
+        }
+
+        showToast(res.data.actionTaken || `Applied ${action.replace('_', ' ')}!`);
+      } else {
+        showToast(res.error || 'Could not refine caption.');
+      }
+    } catch (err: any) {
+      showToast(`Notice: ${err.message || 'Refinement processed'}`);
+    } finally {
+      setIsRefining(false);
+      setRefiningAction(null);
+    }
+  };
+
+  // Apply Unicode Bold or Italic to selected text in textarea
+  const handleApplyUnicodeFormat = (formatType: 'bold' | 'italic') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = postContent.substring(start, end);
+
+    if (selectedText) {
+      const converted = formatType === 'bold' ? toUnicodeBold(selectedText) : toUnicodeItalic(selectedText);
+      const newContent = postContent.substring(0, start) + converted + postContent.substring(end);
+      setPostContent(newContent);
+      showToast(`Applied Unicode ${formatType} to selection.`);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start, start + converted.length);
+      }, 50);
+    } else {
+      const placeholder = formatType === 'bold' ? toUnicodeBold('KEY INSIGHT') : toUnicodeItalic('Key Principle');
+      const newContent = postContent.substring(0, start) + ' ' + placeholder + ' ' + postContent.substring(end);
+      setPostContent(newContent);
+      showToast(`Inserted Unicode ${formatType} heading.`);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + 1, start + 1 + placeholder.length);
+      }, 50);
+    }
+  };
+
+  // Insert bullet markers or emojis at cursor
+  const handleInsertSnippet = (snippet: string, isBullet = false) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const insertion = isBullet ? `\n${snippet} ` : ` ${snippet} `;
+    const newContent = postContent.substring(0, start) + insertion + postContent.substring(start);
+    setPostContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + insertion.length, start + insertion.length);
+    }, 50);
+  };
+
+  // Strip Markdown asterisks & clean formatting
+  const handleCleanMarkdownFormatting = () => {
+    const cleaned = stripMarkdown(postContent);
+    setPostContent(cleaned);
+    showToast('Cleaned all markdown asterisks and heading markers!');
+  };
+
+  // Apply selected viral hook from the modal
+  const handleApplyHookFromModal = (hook: string) => {
+    const lines = postContent.split('\n');
+    lines[0] = hook;
+    setPostContent(lines.join('\n'));
+    setShowHookModal(false);
+    showToast('Applied viral hook to opening line!');
   };
 
   // Generate / Redesign Visual Image directly from the current Post Caption
@@ -1550,12 +1713,46 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
             </div>
           </div>
 
-          {/* Step 1: AI Topic Generator */}
-          <div className="space-y-2.5">
-            <label className="text-xs font-semibold text-neutral-200 flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
-              <span>1. Topic or Keyword (AI Assistant)</span>
-            </label>
+          {/* Step 1: AI Topic & Creative Style Studio */}
+          <div className="space-y-3 p-4 rounded-2xl bg-neutral-950/70 border border-neutral-800/80">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800/60 pb-2.5">
+              <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-emerald-400" />
+                <span>1. AI Topic & Creative Style</span>
+              </label>
+
+              {/* Tone / Angle Selector Pills */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-neutral-500 font-medium mr-0.5">Style:</span>
+                {[
+                  { id: 'thought_leadership', label: 'Thought Leadership', icon: Lightbulb },
+                  { id: 'contrarian', label: 'Contrarian Hook', icon: Flame },
+                  { id: 'framework', label: '3-Step Framework', icon: BookOpen },
+                  { id: 'story', label: 'Founder Story', icon: Type },
+                  { id: 'quick_tip', label: 'Quick Tip', icon: Scissors }
+                ].map(item => {
+                  const Icon = item.icon;
+                  const isActive = selectedTone === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedTone(item.id as any)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs'
+                          : 'bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-neutral-200'
+                      }`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Topic Input Bar + Generate Button */}
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="text"
@@ -1567,18 +1764,38 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
                     handleGenerateWithAI();
                   }
                 }}
-                placeholder={`Enter a topic or keyword (e.g. Office Network Setup, CCTV Security)...`}
-                className="flex-1 px-3.5 py-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white placeholder-neutral-500 focus:border-emerald-500 focus:outline-none"
+                placeholder={`Enter a topic or keyword (e.g. Office Network Failover, Ransomware Defense)...`}
+                className="flex-1 px-3.5 py-2.5 rounded-xl bg-neutral-900 border border-neutral-750 text-xs text-white placeholder-neutral-500 focus:border-emerald-500 focus:outline-none transition-colors"
               />
+
+              {/* Post Length Selector */}
+              <div className="flex items-center gap-1 bg-neutral-900 p-1 rounded-xl border border-neutral-750 shrink-0">
+                {(['short', 'standard', 'deep_dive'] as const).map(len => (
+                  <button
+                    key={len}
+                    type="button"
+                    onClick={() => setSelectedLength(len)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold capitalize transition-colors ${
+                      selectedLength === len
+                        ? 'bg-neutral-800 text-white shadow-xs'
+                        : 'text-neutral-400 hover:text-neutral-200'
+                    }`}
+                  >
+                    {len.replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+
               <button
+                type="button"
                 onClick={() => handleGenerateWithAI()}
                 disabled={isGenerating}
-                className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-neutral-950 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0"
+                className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-neutral-950 text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-sm cursor-pointer"
               >
                 {isGenerating ? (
                   <>
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    <span>Generating...</span>
+                    <span>Drafting 3 Angles...</span>
                   </>
                 ) : (
                   <>
@@ -1590,13 +1807,14 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
             </div>
 
             {/* Quick Suggested Topic Chips Grounded in Knowledge Hub */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               <span className="text-[11px] text-neutral-500 mr-1">Knowledge Hub Topics:</span>
               {derivedTopics.map(topic => (
                 <button
                   key={topic}
+                  type="button"
                   onClick={() => handleGenerateWithAI(topic)}
-                  className="text-[11px] px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 transition-colors cursor-pointer"
+                  className="text-[11px] px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 transition-colors cursor-pointer"
                 >
                   {topic}
                 </button>
@@ -1604,36 +1822,341 @@ export const PlatformSocialWorkspace: React.FC<PlatformSocialWorkspaceProps> = (
             </div>
           </div>
 
-          {/* Step 2: Post Caption & Hashtags */}
+          {/* Step 2: AI Post Caption Studio & Copywriting Canvas */}
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-semibold text-neutral-200">
-                  2. Post Caption
-                </label>
-                {isCaptionHighlighted && (
-                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-semibold animate-pulse flex items-center gap-1">
-                    ✦ Smart LinkedIn Vibe Generated
-                  </span>
-                )}
+            {/* Header: Title, Multi-Draft Tabs, and Live Readability/Fold Telemetry */}
+            {(() => {
+              const foldInfo = getLinkedInFoldStatus(postContent);
+              return (
+                <div className="flex flex-col gap-2 p-3 rounded-2xl bg-neutral-950/80 border border-neutral-800">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <Type className="h-4 w-4 text-sky-400" />
+                        <span>2. Post Caption Studio</span>
+                      </label>
+                      {isCaptionHighlighted && (
+                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-semibold animate-pulse flex items-center gap-1">
+                          ✦ Smart Copy Applied
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Metrics and LinkedIn Fold Badge */}
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <span className="font-mono text-neutral-400">
+                        {foldInfo.charCount} chars • {foldInfo.wordCount} words • ~{foldInfo.estimatedReadTimeSec}s read
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border flex items-center gap-1 ${
+                          foldInfo.isFolded
+                            ? 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                            : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                        }`}
+                        title={foldInfo.isFolded ? 'Desktop/Mobile LinkedIn cuts off with "...see more" after ~210 chars' : 'Entire post fits before fold'}
+                      >
+                        <Eye className="h-3 w-3" />
+                        <span>{foldInfo.isFolded ? '210c Hook Before Fold' : '100% Above Fold'}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Multi-Draft Variation Selector Tabs (if drafts generated) */}
+                  {(multiDrafts.contrarian || multiDrafts.framework || multiDrafts.story) && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-neutral-800/80">
+                      <span className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider mr-1">
+                        Select Draft Angle:
+                      </span>
+                      {multiDrafts.contrarian && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectDraft('contrarian')}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                            activeDraftTab === 'contrarian'
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs'
+                              : 'bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white'
+                          }`}
+                        >
+                          <Flame className="h-3 w-3 text-amber-400" />
+                          <span>Draft 1: Contrarian Hook</span>
+                        </button>
+                      )}
+                      {multiDrafts.framework && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectDraft('framework')}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                            activeDraftTab === 'framework'
+                              ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-xs'
+                              : 'bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white'
+                          }`}
+                        >
+                          <BookOpen className="h-3 w-3 text-sky-400" />
+                          <span>Draft 2: 3-Step Framework</span>
+                        </button>
+                      )}
+                      {multiDrafts.story && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectDraft('story')}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                            activeDraftTab === 'story'
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-xs'
+                              : 'bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white'
+                          }`}
+                        >
+                          <Type className="h-3 w-3 text-purple-400" />
+                          <span>Draft 3: Story & Lesson</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Unicode & LinkedIn Formatting Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 p-2 rounded-xl bg-neutral-900 border border-neutral-800">
+              <div className="flex flex-wrap items-center gap-1">
+                {/* Unicode Bold */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyUnicodeFormat('bold')}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-white text-xs font-bold border border-neutral-750 transition-colors cursor-pointer"
+                  title="Convert selected text into Unicode Bold (renders natively on LinkedIn)"
+                >
+                  <Bold className="h-3.5 w-3.5" />
+                  <span>𝗕 Bold</span>
+                </button>
+
+                {/* Unicode Italic */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyUnicodeFormat('italic')}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-white text-xs font-serif italic border border-neutral-750 transition-colors cursor-pointer"
+                  title="Convert selected text into Unicode Italic (renders natively on LinkedIn)"
+                >
+                  <Italic className="h-3.5 w-3.5" />
+                  <span>𝘐 Italic</span>
+                </button>
+
+                <div className="h-4 w-[1px] bg-neutral-750 mx-1 hidden sm:block"></div>
+
+                {/* Bullets & Emojis */}
+                <button
+                  type="button"
+                  onClick={() => handleInsertSnippet('✦', true)}
+                  className="px-2 py-1 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-neutral-300 text-xs border border-neutral-750 transition-colors cursor-pointer"
+                  title="Insert clean bullet marker"
+                >
+                  ✦ Bullet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertSnippet('▸', true)}
+                  className="px-2 py-1 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-neutral-300 text-xs border border-neutral-750 transition-colors cursor-pointer"
+                  title="Insert arrow bullet"
+                >
+                  ▸ Arrow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInsertSnippet('✓', true)}
+                  className="px-2 py-1 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-emerald-400 text-xs border border-neutral-750 transition-colors cursor-pointer"
+                  title="Insert check marker"
+                >
+                  ✓ Check
+                </button>
+
+                {/* Quick Emoji Inserters */}
+                {['💡', '🚀', '📌', '🔥'].map(emoji => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => handleInsertSnippet(emoji, false)}
+                    className="px-1.5 py-1 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-xs transition-colors cursor-pointer"
+                  >
+                    {emoji}
+                  </button>
+                ))}
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] text-neutral-500">
-                  {postContent.length} chars
-                </span>
+
+              {/* Clean Markdown & Fold Preview Toggle */}
+              <div className="flex items-center gap-1 ml-auto">
+                <button
+                  type="button"
+                  onClick={handleCleanMarkdownFormatting}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 text-xs border border-neutral-750 transition-colors cursor-pointer"
+                  title="Remove markdown asterisks and heading markers"
+                >
+                  <span>🧹 Clean Markdown</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowFoldPreview(!showFoldPreview)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                    showFoldPreview
+                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                      : 'bg-neutral-850 hover:bg-neutral-800 text-neutral-400 border-neutral-750'
+                  }`}
+                  title="Toggle LinkedIn 'See More' fold line preview"
+                >
+                  <Eye className="h-3 w-3" />
+                  <span>{showFoldPreview ? 'Hide Fold' : 'Fold Guide'}</span>
+                </button>
               </div>
             </div>
+
+            {/* LinkedIn 210-Char "See More" Fold Visualizer (if toggled) */}
+            {showFoldPreview && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 p-3 rounded-xl bg-neutral-900/90 border border-neutral-800 text-xs animate-in fade-in duration-200">
+                <div className="p-3 rounded-lg bg-blue-950/20 border border-blue-500/30 space-y-1">
+                  <div className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                    <Eye className="h-3 w-3" />
+                    <span>Above the Fold (First 210 Characters)</span>
+                  </div>
+                  <p className="text-neutral-200 leading-relaxed font-sans whitespace-pre-wrap">
+                    {postContent.slice(0, 210) || '(No content yet)'}
+                  </p>
+                  <div className="text-[10px] text-blue-400/80 font-mono pt-1">
+                    {Math.min(210, postContent.length)} / 210 characters visible before "...see more"
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-neutral-950 border border-neutral-800 space-y-1">
+                  <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                    <span>Below the Fold (Hidden Until Click)</span>
+                  </div>
+                  <p className="text-neutral-400 leading-relaxed font-sans whitespace-pre-wrap">
+                    {postContent.slice(210) || '(No folded content)'}
+                  </p>
+                  <div className="text-[10px] text-neutral-500 font-mono pt-1">
+                    {Math.max(0, postContent.length - 210)} characters revealed after click
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Primary Textarea Editor Canvas */}
             <textarea
+              ref={textareaRef}
               value={postContent}
               onChange={e => setPostContent(e.target.value)}
-              rows={9}
-              placeholder={`Post caption is currently empty. Enter a topic above or select a Knowledge Hub topic to generate a smart LinkedIn-style post...`}
-              className={`w-full p-4 rounded-xl bg-neutral-950 text-xs text-neutral-100 leading-relaxed focus:outline-none transition-all duration-500 ${
+              rows={10}
+              placeholder={`Write your post or select a topic above to generate a smart LinkedIn-ready post...`}
+              className={`w-full p-4 rounded-xl bg-neutral-950 text-xs text-neutral-100 font-sans leading-relaxed focus:outline-none transition-all duration-300 ${
                 isCaptionHighlighted
                   ? 'border-2 border-emerald-400 ring-4 ring-emerald-500/25 bg-emerald-950/20 shadow-lg shadow-emerald-500/10'
                   : 'border border-neutral-800 focus:border-emerald-500'
               }`}
             />
+
+            {/* 1-Click AI Copywriting Refinement Suite */}
+            <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800/90 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-neutral-400 font-semibold">
+                <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                <span>1-Click AI Refinement:</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* Rewrite Hook */}
+                <button
+                  type="button"
+                  onClick={() => handleRefineCaption('rewrite_hook')}
+                  disabled={isRefining || !postContent.trim()}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-amber-300 text-xs font-semibold border border-amber-500/30 transition-all cursor-pointer disabled:opacity-50"
+                  title="Generate viral opening hooks for the top 2 lines"
+                >
+                  <Flame className={`h-3 w-3 ${refiningAction === 'rewrite_hook' ? 'animate-spin' : ''}`} />
+                  <span>{refiningAction === 'rewrite_hook' ? 'Rewriting Hook...' : '⚡ Rewrite Hook'}</span>
+                </button>
+
+                {/* Make Shorter */}
+                <button
+                  type="button"
+                  onClick={() => handleRefineCaption('shorten')}
+                  disabled={isRefining || !postContent.trim()}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-sky-300 text-xs font-semibold border border-sky-500/30 transition-all cursor-pointer disabled:opacity-50"
+                  title="Trim fluff and make copy concise and punchy"
+                >
+                  <Scissors className={`h-3 w-3 ${refiningAction === 'shorten' ? 'animate-spin' : ''}`} />
+                  <span>{refiningAction === 'shorten' ? 'Shortening...' : '✂️ Make Shorter'}</span>
+                </button>
+
+                {/* Expand & Deepen */}
+                <button
+                  type="button"
+                  onClick={() => handleRefineCaption('expand')}
+                  disabled={isRefining || !postContent.trim()}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-purple-300 text-xs font-semibold border border-purple-500/30 transition-all cursor-pointer disabled:opacity-50"
+                  title="Add actionable real-world framework and metrics"
+                >
+                  <BookOpen className={`h-3 w-3 ${refiningAction === 'expand' ? 'animate-spin' : ''}`} />
+                  <span>{refiningAction === 'expand' ? 'Expanding...' : '📈 Expand & Deepen'}</span>
+                </button>
+
+                {/* Stronger CTA */}
+                <button
+                  type="button"
+                  onClick={() => handleRefineCaption('improve_cta')}
+                  disabled={isRefining || !postContent.trim()}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition-all cursor-pointer disabled:opacity-50"
+                  title="Add high-converting discussion question to boost comments"
+                >
+                  <MessageSquare className={`h-3 w-3 ${refiningAction === 'improve_cta' ? 'animate-spin' : ''}`} />
+                  <span>{refiningAction === 'improve_cta' ? 'Polishing CTA...' : '💬 Stronger CTA'}</span>
+                </button>
+
+                {/* Fix Spacing */}
+                <button
+                  type="button"
+                  onClick={() => handleRefineCaption('polish_formatting')}
+                  disabled={isRefining || !postContent.trim()}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-neutral-300 text-xs font-semibold border border-neutral-750 transition-all cursor-pointer disabled:opacity-50"
+                  title="Ensure clean double-line breaks and clean bullets"
+                >
+                  <span>🧹 Fix Spacing</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Viral Hook Alternatives Picker Modal */}
+            {showHookModal && hookVariations.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-neutral-900 border border-amber-500/40 space-y-2 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between pb-1 border-b border-neutral-800">
+                  <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <Flame className="h-3.5 w-3.5" />
+                    <span>Choose a Viral Hook for your Opening Line:</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHookModal(false)}
+                    className="text-neutral-400 hover:text-white p-1"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  {hookVariations.map((hook, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800 hover:border-amber-500/50 flex items-center justify-between gap-3 text-xs text-neutral-200 transition-colors"
+                    >
+                      <span className="font-medium">{hook}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyHookFromModal(hook)}
+                        className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-semibold text-[11px] border border-amber-500/30 shrink-0 transition-colors cursor-pointer"
+                      >
+                        Use This Hook
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* FeedHive-Style Live Predictive Virality Meter & Smart Best-Time Pill */}
             <ViralityPredictorMeter
