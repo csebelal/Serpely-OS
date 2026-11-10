@@ -203,16 +203,18 @@ export const LoginView: React.FC<LoginViewProps> = ({
   };
 
   const pageBg = isDark
-    ? 'bg-[#070a09] text-slate-100'
-    : 'bg-[#f4f7f5] text-slate-900';
+    ? 'bg-[#070a09] text-white'
+    : 'bg-[#f4f7f5] text-neutral-900';
   const cardBg = isDark
     ? 'bg-[#0e1411] border-neutral-800'
-    : 'bg-white border-slate-200 shadow-sm';
-  const mutedText = isDark ? 'text-slate-300' : 'text-slate-600';
-  const subtleText = isDark ? 'text-slate-400' : 'text-slate-500';
+    : 'bg-white border-neutral-200 shadow-sm';
+  const headingText = isDark ? 'text-white' : 'text-neutral-900';
+  const bodyText = isDark ? 'text-neutral-200' : 'text-neutral-800';
+  const mutedText = isDark ? 'text-neutral-400' : 'text-neutral-600';
+  const subtleText = isDark ? 'text-neutral-500' : 'text-neutral-500';
   const inputSurface = isDark
-    ? 'bg-[#090d0b] border-neutral-700 text-slate-100 placeholder:text-slate-500'
-    : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400';
+    ? 'bg-[#090d0b] border-neutral-700 text-white placeholder:text-neutral-500'
+    : 'bg-white border-neutral-300 text-neutral-900 placeholder:text-neutral-400';
 
   return (
     <div className={`min-h-screen w-full flex flex-col font-sans ${pageBg}`}>
@@ -226,7 +228,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       {/* Clean Minimal Top Header */}
       <header
         className={`w-full border-b ${
-          isDark ? 'border-neutral-800/80 bg-[#070a09]' : 'border-slate-200/80 bg-white/80'
+          isDark ? 'border-neutral-800/80 bg-[#070a09]' : 'border-neutral-200/80 bg-white/80'
         }`}
       >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
@@ -234,7 +236,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
               S
             </div>
-            <span className="font-bold tracking-tight text-sm uppercase">
+            <span className={`font-bold tracking-tight text-sm uppercase ${headingText}`}>
               SINCLY{' '}
               <span className={isDark ? 'text-emerald-400' : 'text-emerald-700'}>
                 OS
@@ -249,8 +251,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 onClick={onCancel}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                   isDark
-                    ? 'border-neutral-800 text-slate-200 hover:bg-neutral-900'
-                    : 'border-slate-200 text-slate-700 hover:bg-slate-100'
+                    ? 'border-neutral-800 text-neutral-200 hover:bg-neutral-900'
+                    : 'border-neutral-200 text-neutral-700 hover:bg-neutral-100'
                 }`}
               >
                 <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -264,8 +266,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
                 className={`p-2 rounded-xl border cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                   isDark
-                    ? 'border-neutral-800 bg-neutral-900 text-slate-200 hover:bg-neutral-800'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                    ? 'border-neutral-800 bg-neutral-900 text-neutral-200 hover:bg-neutral-800'
+                    : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100'
                 }`}
               >
                 {isDark ? (
@@ -301,7 +303,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
               <h1
                 id="auth-hero-heading"
-                className="text-3xl sm:text-4xl lg:text-[2.65rem] font-extrabold tracking-tight leading-[1.15]"
+                className={`text-3xl sm:text-4xl lg:text-[2.65rem] font-extrabold tracking-tight leading-[1.15] ${headingText}`}
               >
                 Autonomous marketing,{' '}
                 <span className={isDark ? 'text-emerald-400' : 'text-emerald-700'}>
@@ -323,13 +325,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       className={`h-9 w-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${
                         isDark
                           ? 'bg-neutral-900 border-neutral-800 text-emerald-400'
-                          : 'bg-white border-slate-200 text-emerald-700'
+                          : 'bg-white border-neutral-200 text-emerald-700 shadow-xs'
                       }`}
                     >
                       <Icon className="h-4 w-4" aria-hidden="true" />
                     </div>
                     <div className="space-y-0.5">
-                      <h2 className="text-sm font-semibold">{item.title}</h2>
+                      <h2 className={`text-sm font-semibold ${headingText}`}>{item.title}</h2>
                       <p className={`text-xs sm:text-sm leading-relaxed ${mutedText}`}>
                         {item.description}
                       </p>
@@ -350,7 +352,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 className={`grid grid-cols-2 p-1 rounded-xl border ${
                   isDark
                     ? 'bg-[#090d0b] border-neutral-800'
-                    : 'bg-slate-100 border-slate-200'
+                    : 'bg-neutral-100 border-neutral-200'
                 }`}
               >
                 <button
@@ -360,12 +362,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   onClick={() => switchAuthMode(false)}
                   className={`py-2 px-3 rounded-lg text-xs sm:text-sm font-semibold cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                     !isSignUp
-                      ? isDark
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-emerald-600 text-white shadow-xs'
                       : isDark
-                        ? 'text-slate-300 hover:text-white'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'text-neutral-400 hover:text-white'
+                        : 'text-neutral-600 hover:text-neutral-900'
                   }`}
                 >
                   Sign in
@@ -377,12 +377,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   onClick={() => switchAuthMode(true)}
                   className={`py-2 px-3 rounded-lg text-xs sm:text-sm font-semibold cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                     isSignUp
-                      ? isDark
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-white text-slate-900 shadow-xs'
+                      ? 'bg-emerald-600 text-white shadow-xs'
                       : isDark
-                        ? 'text-slate-300 hover:text-white'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'text-neutral-400 hover:text-white'
+                        : 'text-neutral-600 hover:text-neutral-900'
                   }`}
                 >
                   Create account
@@ -390,7 +388,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
 
               <div className="space-y-1">
-                <h2 id="auth-card-heading" className="text-xl sm:text-2xl font-bold tracking-tight">
+                <h2 id="auth-card-heading" className={`text-xl sm:text-2xl font-bold tracking-tight ${headingText}`}>
                   {isSignUp ? 'Create your workspace' : 'Sign in to Sincly'}
                 </h2>
                 <p className={`text-xs sm:text-sm ${mutedText}`}>
@@ -434,7 +432,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 {isSignUp && (
                   <div className="space-y-1.5">
-                    <label htmlFor="auth-name" className="block text-xs sm:text-sm font-semibold">
+                    <label htmlFor="auth-name" className={`block text-xs sm:text-sm font-semibold ${bodyText}`}>
                       Full name
                     </label>
                     <div className="relative">
@@ -457,7 +455,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 )}
 
                 <div className="space-y-1.5">
-                  <label htmlFor="auth-email" className="block text-xs sm:text-sm font-semibold">
+                  <label htmlFor="auth-email" className={`block text-xs sm:text-sm font-semibold ${bodyText}`}>
                     Work email
                   </label>
                   <div className="relative">
@@ -481,7 +479,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label htmlFor="auth-password" className="block text-xs sm:text-sm font-semibold">
+                  <label htmlFor="auth-password" className={`block text-xs sm:text-sm font-semibold ${bodyText}`}>
                     Password
                   </label>
                   <div className="relative">
@@ -512,8 +510,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       aria-pressed={showPassword}
                       className={`absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                         isDark
-                          ? 'text-slate-300 hover:bg-neutral-800 hover:text-white'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                          : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
                       }`}
                     >
                       {showPassword ? (
@@ -532,7 +530,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
                 {isSignUp && (
                   <div className="space-y-1.5">
-                    <label htmlFor="auth-confirm-password" className="block text-xs sm:text-sm font-semibold">
+                    <label htmlFor="auth-confirm-password" className={`block text-xs sm:text-sm font-semibold ${bodyText}`}>
                       Confirm password
                     </label>
                     <div className="relative">
@@ -560,8 +558,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                         aria-pressed={showConfirmPassword}
                         className={`absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                           isDark
-                            ? 'text-slate-300 hover:bg-neutral-800 hover:text-white'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            ? 'text-neutral-400 hover:bg-neutral-800 hover:text-white'
+                            : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
                         }`}
                       >
                         {showConfirmPassword ? (
@@ -581,11 +579,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       id="rememberSession"
                       checked={rememberMe}
                       onChange={e => setRememberMe(e.target.checked)}
-                      className="h-4 w-4 rounded border-slate-300 accent-emerald-600 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                      className="h-4 w-4 rounded border-neutral-300 accent-emerald-600 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                     />
                     <label
                       htmlFor="rememberSession"
-                      className={`text-xs sm:text-sm font-medium cursor-pointer ${mutedText}`}
+                      className={`text-xs sm:text-sm font-medium cursor-pointer ${bodyText}`}
                     >
                       Keep me signed in
                     </label>
@@ -610,7 +608,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
               <div
                 className={`pt-4 border-t text-center text-xs sm:text-sm ${
-                  isDark ? 'border-neutral-800 text-slate-300' : 'border-slate-200 text-slate-600'
+                  isDark ? 'border-neutral-800 text-neutral-400' : 'border-neutral-200 text-neutral-600'
                 }`}
               >
                 {isSignUp ? 'Already have an account? ' : "Don't have an account? "}

@@ -60,16 +60,6 @@ html.light {
   --color-neutral-100: #09110d;
   --color-neutral-50: #050a07;
 
-  --color-slate-950: #f4f7f5;
-  --color-slate-900: #ffffff;
-  --color-slate-800: #e2e8f0;
-  --color-slate-700: #cbd5e1;
-  --color-slate-500: #475569;
-  --color-slate-400: #334155;
-  --color-slate-300: #1e293b;
-  --color-slate-200: #0f172a;
-  --color-slate-100: #09110d;
-
   --color-emerald-950: #e8f8ef;
   --color-emerald-900: #d1f0df;
   --color-emerald-400: #059669;
@@ -399,7 +389,10 @@ html.light [class*="hover:bg-red-6"]:hover * {
 }
 
 html.light .text-neutral-950,
-html.light .text-neutral-900 {
+html.light .text-neutral-900,
+html.light .text-slate-950,
+html.light .text-slate-900,
+html.light .text-slate-800 {
   color: #050a07 !important;
 }
 

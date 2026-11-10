@@ -172,22 +172,24 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
   };
 
   const pageBg = isDark
-    ? 'bg-[#070a09] text-slate-100'
-    : 'bg-[#f4f7f5] text-slate-900';
+    ? 'bg-[#070a09] text-white'
+    : 'bg-[#f4f7f5] text-neutral-900';
   const cardBg = isDark
     ? 'bg-[#0e1411] border-neutral-800'
-    : 'bg-white border-slate-200 shadow-sm';
-  const mutedText = isDark ? 'text-slate-300' : 'text-slate-600';
-  const subtleText = isDark ? 'text-slate-400' : 'text-slate-500';
+    : 'bg-white border-neutral-200 shadow-sm';
+  const headingText = isDark ? 'text-white' : 'text-neutral-900';
+  const bodyText = isDark ? 'text-neutral-200' : 'text-neutral-800';
+  const mutedText = isDark ? 'text-neutral-400' : 'text-neutral-600';
+  const subtleText = isDark ? 'text-neutral-500' : 'text-neutral-500';
   const inputSurface = isDark
-    ? 'bg-[#090d0b] border-neutral-700 text-slate-100 placeholder:text-slate-500'
-    : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400';
+    ? 'bg-[#090d0b] border-neutral-700 text-white placeholder:text-neutral-500'
+    : 'bg-white border-neutral-300 text-neutral-900 placeholder:text-neutral-400';
   const optionIdle = isDark
-    ? 'bg-[#090d0b] border-neutral-800 hover:border-neutral-700 text-slate-200'
-    : 'bg-white border-slate-200 hover:border-slate-300 text-slate-800';
+    ? 'bg-[#090d0b] border-neutral-800 hover:border-neutral-700 text-neutral-200'
+    : 'bg-white border-neutral-200 hover:border-neutral-300 text-neutral-800';
   const optionSelected = isDark
     ? 'bg-emerald-950/60 border-emerald-500 text-white'
-    : 'bg-emerald-50/70 border-emerald-600 text-slate-900';
+    : 'bg-emerald-50/70 border-emerald-600 text-neutral-900';
 
   return (
     <div className={`min-h-screen w-full flex flex-col font-sans ${pageBg}`}>
@@ -201,7 +203,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
       {/* Top Header */}
       <header
         className={`w-full border-b ${
-          isDark ? 'border-neutral-800/80 bg-[#070a09]' : 'border-slate-200/80 bg-white/80'
+          isDark ? 'border-neutral-800/80 bg-[#070a09]' : 'border-neutral-200/80 bg-white/80'
         }`}
       >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
@@ -209,7 +211,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
             <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
               S
             </div>
-            <span className="font-bold tracking-tight text-sm uppercase">
+            <span className={`font-bold tracking-tight text-sm uppercase ${headingText}`}>
               SINCLY{' '}
               <span className={isDark ? 'text-emerald-400' : 'text-emerald-700'}>
                 OS
@@ -237,8 +239,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                               ? 'bg-neutral-900 border-emerald-700/60 text-emerald-400'
                               : 'bg-emerald-50/60 border-emerald-300 text-emerald-700'
                             : isDark
-                              ? 'bg-neutral-900 border-neutral-800 text-slate-400'
-                              : 'bg-slate-50 border-slate-200 text-slate-500'
+                              ? 'bg-neutral-900 border-neutral-800 text-neutral-400'
+                              : 'bg-neutral-50 border-neutral-200 text-neutral-500'
                       }`}
                     >
                       <span
@@ -248,8 +250,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                             : isActive
                               ? 'bg-emerald-600 text-white'
                               : isDark
-                                ? 'bg-neutral-800 text-slate-300'
-                                : 'bg-slate-200 text-slate-700'
+                                ? 'bg-neutral-800 text-neutral-300'
+                                : 'bg-neutral-200 text-neutral-700'
                         }`}
                       >
                         {isDone ? <Check className="h-3 w-3" aria-hidden="true" /> : item.id}
@@ -259,7 +261,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                     {idx < STEPS.length - 1 && (
                       <span
                         aria-hidden="true"
-                        className={`w-4 h-px ${isDark ? 'bg-neutral-800' : 'bg-slate-300'}`}
+                        className={`w-4 h-px ${isDark ? 'bg-neutral-800' : 'bg-neutral-300'}`}
                       />
                     )}
                   </li>
@@ -276,8 +278,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                 aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
                 className={`p-2 rounded-xl border cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                   isDark
-                    ? 'border-neutral-800 bg-neutral-900 text-slate-200 hover:bg-neutral-800'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                    ? 'border-neutral-800 bg-neutral-900 text-neutral-200 hover:bg-neutral-800'
+                    : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100'
                 }`}
               >
                 {isDark ? (
@@ -292,8 +294,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               onClick={onSkip}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                 isDark
-                  ? 'border-neutral-800 text-slate-300 hover:bg-neutral-900 hover:text-white'
-                  : 'border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  ? 'border-neutral-800 text-neutral-300 hover:bg-neutral-900 hover:text-white'
+                  : 'border-neutral-200 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900'
               }`}
             >
               Skip setup
@@ -322,7 +324,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                 <h1
                   ref={stepHeadingRef}
                   tabIndex={-1}
-                  className="text-2xl sm:text-3xl font-bold tracking-tight focus:outline-none"
+                  className={`text-2xl sm:text-3xl font-bold tracking-tight focus:outline-none ${headingText}`}
                 >
                   Tell us about your brand
                 </h1>
@@ -348,7 +350,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
 
               <div className="space-y-4">
                 <div className="space-y-1.5">
-                  <label htmlFor="onboarding-brand-name" className="block text-sm font-semibold">
+                  <label htmlFor="onboarding-brand-name" className={`block text-sm font-semibold ${bodyText}`}>
                     Workspace or brand name <span className="text-rose-600">*</span>
                   </label>
                   <div className="relative">
@@ -374,7 +376,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label htmlFor="onboarding-website" className="block text-sm font-semibold">
+                  <label htmlFor="onboarding-website" className={`block text-sm font-semibold ${bodyText}`}>
                     Website URL <span className={`font-normal text-xs ${subtleText}`}>(optional)</span>
                   </label>
                   <div className="relative">
@@ -394,7 +396,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label htmlFor="onboarding-industry" className="block text-sm font-semibold">
+                  <label htmlFor="onboarding-industry" className={`block text-sm font-semibold ${bodyText}`}>
                     Industry
                   </label>
                   <select
@@ -423,7 +425,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                 <h1
                   ref={stepHeadingRef}
                   tabIndex={-1}
-                  className="text-2xl sm:text-3xl font-bold tracking-tight focus:outline-none"
+                  className={`text-2xl sm:text-3xl font-bold tracking-tight focus:outline-none ${headingText}`}
                 >
                   Set your brand voice and goal
                 </h1>
@@ -433,7 +435,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               </div>
 
               <fieldset className="space-y-2.5">
-                <legend className="text-sm font-semibold flex items-center gap-2 mb-1">
+                <legend className={`text-sm font-semibold flex items-center gap-2 mb-1 ${headingText}`}>
                   <Megaphone className="h-4 w-4 text-emerald-600" aria-hidden="true" />
                   <span>Brand voice & tone</span>
                 </legend>
@@ -456,7 +458,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                           className="mt-1 h-4 w-4 accent-emerald-600 cursor-pointer shrink-0"
                         />
                         <span className="space-y-0.5">
-                          <span className="block text-sm font-semibold">{option.title}</span>
+                          <span className={`block text-sm font-semibold ${headingText}`}>{option.title}</span>
                           <span className={`block text-xs ${mutedText}`}>{option.description}</span>
                         </span>
                       </label>
@@ -466,7 +468,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               </fieldset>
 
               <fieldset className="space-y-2.5">
-                <legend className="text-sm font-semibold flex items-center gap-2 mb-1">
+                <legend className={`text-sm font-semibold flex items-center gap-2 mb-1 ${headingText}`}>
                   <Target className="h-4 w-4 text-emerald-600" aria-hidden="true" />
                   <span>Primary 30-day goal</span>
                 </legend>
@@ -489,7 +491,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                           className="mt-1 h-4 w-4 accent-emerald-600 cursor-pointer shrink-0"
                         />
                         <span className="space-y-0.5">
-                          <span className="block text-sm font-semibold">{goal.title}</span>
+                          <span className={`block text-sm font-semibold ${headingText}`}>{goal.title}</span>
                           <span className={`block text-xs ${mutedText}`}>{goal.description}</span>
                         </span>
                       </label>
@@ -499,7 +501,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
               </fieldset>
 
               <div className="space-y-1.5">
-                <label htmlFor="onboarding-audience" className="text-sm font-semibold flex items-center gap-2">
+                <label htmlFor="onboarding-audience" className={`text-sm font-semibold flex items-center gap-2 ${bodyText}`}>
                   <Users className="h-4 w-4 text-emerald-600" aria-hidden="true" />
                   <span>
                     Target audience <span className={`font-normal text-xs ${subtleText}`}>(optional)</span>
@@ -526,7 +528,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                 <h1
                   ref={stepHeadingRef}
                   tabIndex={-1}
-                  className="text-2xl sm:text-3xl font-bold tracking-tight focus:outline-none"
+                  className={`text-2xl sm:text-3xl font-bold tracking-tight focus:outline-none ${headingText}`}
                 >
                   Review your workspace setup
                 </h1>
@@ -539,20 +541,20 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                 className={`rounded-xl border divide-y ${
                   isDark
                     ? 'border-neutral-800 divide-neutral-800 bg-[#090d0b]'
-                    : 'border-slate-200 divide-slate-200 bg-slate-50/70'
+                    : 'border-neutral-200 divide-neutral-200 bg-neutral-50/70'
                 }`}
               >
                 <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                   <dt className={`text-xs font-semibold uppercase tracking-wide ${subtleText}`}>
                     Workspace Name
                   </dt>
-                  <dd className="text-sm font-semibold">{brandName.trim()}</dd>
+                  <dd className={`text-sm font-semibold ${headingText}`}>{brandName.trim()}</dd>
                 </div>
                 <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                   <dt className={`text-xs font-semibold uppercase tracking-wide ${subtleText}`}>
                     Website & Industry
                   </dt>
-                  <dd className="text-sm font-medium">
+                  <dd className={`text-sm font-medium ${headingText}`}>
                     {website.trim() ? `${website.trim()} · ` : ''}
                     {industry}
                   </dd>
@@ -561,20 +563,20 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                   <dt className={`text-xs font-semibold uppercase tracking-wide ${subtleText}`}>
                     Brand Voice
                   </dt>
-                  <dd className="text-sm font-medium">{voiceTone}</dd>
+                  <dd className={`text-sm font-medium ${headingText}`}>{voiceTone}</dd>
                 </div>
                 <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                   <dt className={`text-xs font-semibold uppercase tracking-wide ${subtleText}`}>
                     Primary Goal
                   </dt>
-                  <dd className="text-sm font-medium">{primaryGoal}</dd>
+                  <dd className={`text-sm font-medium ${headingText}`}>{primaryGoal}</dd>
                 </div>
                 {targetAudience.trim() && (
                   <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                     <dt className={`text-xs font-semibold uppercase tracking-wide ${subtleText}`}>
                       Target Audience
                     </dt>
-                    <dd className="text-sm font-medium">{targetAudience.trim()}</dd>
+                    <dd className={`text-sm font-medium ${headingText}`}>{targetAudience.trim()}</dd>
                   </div>
                 )}
               </dl>
@@ -611,7 +613,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
           {/* Footer Navigation Controls */}
           <div
             className={`mt-8 pt-5 border-t flex items-center justify-between gap-3 ${
-              isDark ? 'border-neutral-800' : 'border-slate-200'
+              isDark ? 'border-neutral-800' : 'border-neutral-200'
             }`}
           >
             {step > 1 ? (
@@ -620,8 +622,8 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({
                 onClick={handleBack}
                 className={`inline-flex items-center gap-2 px-4 min-h-[44px] rounded-xl border text-sm font-semibold cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
                   isDark
-                    ? 'border-neutral-700 text-slate-200 hover:bg-neutral-800'
-                    : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                    ? 'border-neutral-700 text-neutral-200 hover:bg-neutral-800'
+                    : 'border-neutral-300 text-neutral-700 hover:bg-neutral-100'
                 }`}
               >
                 <ArrowLeft className="h-4 w-4" aria-hidden="true" />

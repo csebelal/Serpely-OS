@@ -25,9 +25,12 @@ describe('LoginView accessibility and layout', () => {
     expect(html).toContain('aria-label="Show password"');
     expect(html).toContain('for="rememberSession"');
     expect(html).toContain('Sign in to Sincly');
+    // High-contrast light mode classes
+    expect(html).toContain('text-neutral-900');
+    expect(html).not.toContain('text-slate-900');
   });
 
-  it('renders sign-up mode when initialMode is signup', () => {
+  it('renders sign-up mode with theme-safe dark contrast when appTheme is dark', () => {
     const html = renderToString(
       <LoginView
         initialMode="signup"
@@ -40,6 +43,9 @@ describe('LoginView accessibility and layout', () => {
     expect(html).toContain('for="auth-name"');
     expect(html).toContain('for="auth-confirm-password"');
     expect(html).toContain('id="auth-password-hint"');
+    // High-contrast dark mode classes
+    expect(html).toContain('text-white');
+    expect(html).not.toContain('text-slate-900');
   });
 });
 
