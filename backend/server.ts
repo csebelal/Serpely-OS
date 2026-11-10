@@ -120,6 +120,7 @@ import {
   JWT_SECRET,
   DEFAULT_ADMIN_EMAIL
 } from './src/middleware/auth.middleware';
+import { apiRateLimiter } from './src/middleware/rate-limiter.middleware';
 import { createAuthRouter } from './src/routes/auth.routes';
 import { createStateRouter } from './src/routes/state.routes';
 import { createHealthRouter } from './src/routes/health.routes';
@@ -919,6 +920,9 @@ async function startServer() {
     return `${base.replace(/\/$/, '')}/auth/callback`;
   };
 
+  // Apply API rate limiting across all /api routes (300 requests / minute)
+  app.use('/api', apiRateLimiter);
+
   // ============================================================================
   // 0. Health & APM Diagnostics Probe Router
   // ============================================================================
@@ -1611,13 +1615,12 @@ async function startServer() {
     );
 
     const currentCallbackUrl = resolveRedirectUri(req);
-    const localCallbackUrl = `http://localhost:${PORT}/auth/callback`;
 
     return {
       callbackUrls: {
         current: currentCallbackUrl,
         development: currentCallbackUrl,
-        production: localCallbackUrl
+        production: currentCallbackUrl
       },
       facebook: {
         configured: fbConfigured,
@@ -2054,23 +2057,37 @@ async function startServer() {
     await autoSyncPageTokensForUser(BELAL_EMAIL, getUserWorkspace(BELAL_EMAIL));
   };
 
+  // In-memory cache for page token sync with 10-minute cooldown TTL per user to prevent LinkedIn API rate limits
+  const lastSyncByUser = new Map<string, number>();
+  const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
   // ============================================================================
   // 1. OAuth 2.0 URL Generators, Live Credential Vault & Verification Endpoints
   // ============================================================================
-  app.get('/api/auth/status', async (req, res) => {
+  app.get('/api/auth/status', authenticateToken, async (req, res) => {
     const email = resolveUserEmail(req);
     const userDb = getUserWorkspace(email);
-    if (userDb.oauthSessions?.linkedin?.userAccessToken || userDb.oauthSessions?.linkedin?.pageAccessToken) {
-      await autoSyncPageTokensForUser(email, userDb);
+    const now = Date.now();
+    const lastSync = lastSyncByUser.get(email) || 0;
+    if (now - lastSync > SYNC_COOLDOWN_MS) {
+      if (userDb.oauthSessions?.linkedin?.userAccessToken || userDb.oauthSessions?.linkedin?.pageAccessToken) {
+        await autoSyncPageTokensForUser(email, userDb);
+      }
+      lastSyncByUser.set(email, now);
     }
     res.json(buildLiveStatusPayload(req, userDb, email));
   });
 
-  app.get('/api/integrations/live-status', async (req, res) => {
+  app.get('/api/integrations/live-status', authenticateToken, async (req, res) => {
     const email = resolveUserEmail(req);
     const userDb = getUserWorkspace(email);
-    if (userDb.oauthSessions?.linkedin?.userAccessToken || userDb.oauthSessions?.linkedin?.pageAccessToken) {
-      await autoSyncPageTokensForUser(email, userDb);
+    const now = Date.now();
+    const lastSync = lastSyncByUser.get(email) || 0;
+    if (now - lastSync > SYNC_COOLDOWN_MS) {
+      if (userDb.oauthSessions?.linkedin?.userAccessToken || userDb.oauthSessions?.linkedin?.pageAccessToken) {
+        await autoSyncPageTokensForUser(email, userDb);
+      }
+      lastSyncByUser.set(email, now);
     }
     res.json(buildLiveStatusPayload(req, userDb, email));
   });
@@ -2881,7 +2898,7 @@ async function startServer() {
   });
 
   // Disconnect or clear a provider's live session
-  app.post('/api/integrations/disconnect', async (req, res) => {
+  app.post('/api/integrations/disconnect', authenticateToken, async (req, res) => {
     ensureOAuthSessions();
     const email = resolveUserEmail(req);
     const userDb = getUserWorkspace(email);
@@ -5285,7 +5302,7 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  app.post('/api/social/pages/select', async (req, res) => {
+  app.post('/api/social/pages/select', authenticateToken, async (req, res) => {
     const email = resolveUserEmail(req);
     const userDb = getUserWorkspace(email);
     const { pageId } = req.body || {};
@@ -5341,7 +5358,7 @@ Return ONLY valid JSON matching this exact structure:
   });
 
   // Re-sync all LinkedIn pages for current active user using saved access token
-  app.post('/api/social/linkedin/resync-pages', async (req, res) => {
+  app.post('/api/social/linkedin/resync-pages', authenticateToken, async (req, res) => {
     try {
       const email = resolveUserEmail(req);
       const userDb = getUserWorkspace(email);
@@ -5409,7 +5426,7 @@ Return ONLY valid JSON matching this exact structure:
   });
 
   // Manual Page Lookup & Registration by LinkedIn ID, Vanity Name, or URL (Supports /lookup-page & /add-page)
-  app.post(['/api/social/linkedin/lookup-page', '/api/social/linkedin/add-page'], async (req, res) => {
+  app.post(['/api/social/linkedin/lookup-page', '/api/social/linkedin/add-page'], authenticateToken, async (req, res) => {
     try {
       const email = resolveUserEmail(req);
       const userDb = getUserWorkspace(email);
@@ -5576,7 +5593,7 @@ Return ONLY valid JSON matching this exact structure:
   });
 
   // Connect/Add Multi-Channel Social Account (Facebook, Instagram, LinkedIn, X, YouTube)
-  app.post('/api/social/accounts/connect', async (req, res) => {
+  app.post('/api/social/accounts/connect', authenticateToken, async (req, res) => {
     const email = resolveUserEmail(req);
     const userDb = getUserWorkspace(email);
     const {
@@ -5654,7 +5671,7 @@ Return ONLY valid JSON matching this exact structure:
   });
 
   // Disconnect/Remove Social Account
-  app.delete('/api/social/accounts/:id', async (req, res) => {
+  app.delete('/api/social/accounts/:id', authenticateToken, async (req, res) => {
     const email = resolveUserEmail(req);
     const userDb = getUserWorkspace(email);
     const { id } = req.params;
@@ -5667,7 +5684,7 @@ Return ONLY valid JSON matching this exact structure:
   });
 
   // Explicit Social Media Account Logout / Disconnect
-  app.post('/api/social/logout', async (req, res) => {
+  app.post('/api/social/logout', authenticateToken, async (req, res) => {
     ensureOAuthSessions();
     const email = resolveUserEmail(req);
     const userDb = getUserWorkspace(email);

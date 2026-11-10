@@ -1,48 +1,88 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Lock,
-  Mail,
-  User,
+  AlertCircle,
+  ArrowLeft,
+  Bot,
+  CheckCircle2,
   Eye,
   EyeOff,
-  Sparkles,
-  AlertCircle,
-  CheckCircle2
+  Layers,
+  Loader2,
+  Lock,
+  Mail,
+  Moon,
+  ShieldCheck,
+  Sun,
+  User
 } from 'lucide-react';
-import { UserRole, AuthUser } from '../../types';
+import { AuthUser, UserRole } from '../../types';
 import {
   authenticateCredentials,
-  saveCustomUser,
-  RegisteredUserRecord
+  saveCustomUser
 } from '../../data/rbac-data';
 import { apiClient, setStoredAuthToken } from '../../services/apiClient';
 
 interface LoginViewProps {
   currentRole?: UserRole;
-  onLogin: (user: AuthUser) => void;
+  initialMode?: 'signin' | 'signup';
+  appTheme?: 'dark' | 'light';
+  canCancel?: boolean;
+  onToggleTheme?: () => void;
+  onLogin: (user: AuthUser, options?: { isNewUser?: boolean }) => void;
   onCancel?: () => void;
 }
 
+const VALUE_PILLARS = [
+  {
+    icon: Bot,
+    title: '12 specialized marketing agents',
+    description: 'Coordinate research, content, SEO, email, and social in one workspace.'
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Human approval before publishing',
+    description: 'Every campaign, post, and budget change waits for your explicit sign-off.'
+  },
+  {
+    icon: Layers,
+    title: 'Unified brand memory',
+    description: 'Consistent voice, positioning, and audience context across every channel.'
+  }
+];
+
 export const LoginView: React.FC<LoginViewProps> = ({
-  onLogin
+  initialMode = 'signin',
+  appTheme = 'light',
+  canCancel = false,
+  onToggleTheme,
+  onLogin,
+  onCancel
 }) => {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const isDark = appTheme === 'dark';
+
+  const [isSignUp, setIsSignUp] = useState(initialMode === 'signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const toggleAuthMode = () => {
-    const nextMode = !isSignUp;
-    setIsSignUp(nextMode);
+  useEffect(() => {
+    setIsSignUp(initialMode === 'signup');
+  }, [initialMode]);
+
+  const switchAuthMode = (nextSignUp: boolean) => {
+    if (nextSignUp === isSignUp) return;
+    setIsSignUp(nextSignUp);
     setErrorMessage(null);
     setSuccessMessage(null);
     setConfirmPassword('');
+    setShowConfirmPassword(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,18 +95,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
     const cleanPassword = password.trim();
 
     if (!cleanEmail) {
-      setErrorMessage('Please provide an email address.');
+      setErrorMessage('Please enter your work email address.');
       setIsSubmitting(false);
       return;
     }
     if (!cleanPassword) {
-      setErrorMessage('Please provide a password.');
+      setErrorMessage('Please enter your password.');
       setIsSubmitting(false);
       return;
     }
 
     if (isSignUp) {
-      // --- SIGN UP LOGIC (POST /api/auth/register) ---
       if (cleanPassword.length < 6) {
         setErrorMessage('Password must be at least 6 characters.');
         setIsSubmitting(false);
@@ -102,14 +141,13 @@ export const LoginView: React.FC<LoginViewProps> = ({
           saveCustomUser(registeredUser);
         } catch {}
 
-        onLogin(registeredUser);
+        onLogin(registeredUser, { isNewUser: true });
       } catch (err: any) {
         setErrorMessage(err?.message || 'Network error connecting to auth server.');
       } finally {
         setIsSubmitting(false);
       }
     } else {
-      // --- SIGN IN LOGIC (POST /api/auth/login) ---
       try {
         const res = await apiClient.post('/api/auth/login', {
           email: cleanEmail,
@@ -117,7 +155,6 @@ export const LoginView: React.FC<LoginViewProps> = ({
         });
 
         if (!res.success || !res.data?.success) {
-          // Fallback to local offline credentials if network/backend is unreachable
           const fallback = authenticateCredentials(cleanEmail, cleanPassword);
           if (fallback.success && fallback.user) {
             if (rememberMe) {
@@ -126,10 +163,12 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 localStorage.setItem('serpely_active_role', fallback.user.role);
               } catch {}
             }
-            onLogin(fallback.user);
+            onLogin(fallback.user, { isNewUser: false });
             return;
           }
-          setErrorMessage(res.error || res.data?.error || 'Invalid credentials. Please verify your email and password.');
+          setErrorMessage(
+            res.error || res.data?.error || 'Invalid credentials. Please verify your email and password.'
+          );
           setIsSubmitting(false);
           return;
         }
@@ -143,9 +182,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
           localStorage.setItem('serpely_active_role', authenticatedUser.role);
         } catch {}
 
-        onLogin(authenticatedUser);
+        onLogin(authenticatedUser, { isNewUser: false });
       } catch (err: any) {
-        // Fallback to local offline credentials if offline
         const fallback = authenticateCredentials(cleanEmail, cleanPassword);
         if (fallback.success && fallback.user) {
           if (rememberMe) {
@@ -154,7 +192,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               localStorage.setItem('serpely_active_role', fallback.user.role);
             } catch {}
           }
-          onLogin(fallback.user);
+          onLogin(fallback.user, { isNewUser: false });
           return;
         }
         setErrorMessage(err?.message || 'Failed to connect to authentication service.');
@@ -164,419 +202,436 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
   };
 
+  const pageBg = isDark
+    ? 'bg-[#070a09] text-slate-100'
+    : 'bg-[#f4f7f5] text-slate-900';
+  const cardBg = isDark
+    ? 'bg-[#0e1411] border-neutral-800'
+    : 'bg-white border-slate-200 shadow-sm';
+  const mutedText = isDark ? 'text-slate-300' : 'text-slate-600';
+  const subtleText = isDark ? 'text-slate-400' : 'text-slate-500';
+  const inputSurface = isDark
+    ? 'bg-[#090d0b] border-neutral-700 text-slate-100 placeholder:text-slate-500'
+    : 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400';
+
   return (
-    <div className="min-h-screen w-full bg-[#f8faf9] text-neutral-800 flex flex-col justify-between relative overflow-hidden select-none font-sans">
-      {/* Background soft pastel ambient mesh glow (Sincly Mint & Emerald vibe) */}
-      <div className="absolute top-0 left-[-8%] w-[650px] h-[650px] bg-gradient-to-br from-emerald-200/45 via-teal-100/35 to-transparent rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[-10%] left-[25%] w-[600px] h-[600px] bg-gradient-to-tr from-pink-200/35 via-emerald-100/30 to-transparent rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-[15%] right-[-6%] w-[550px] h-[550px] bg-gradient-to-bl from-teal-200/30 via-emerald-100/20 to-transparent rounded-full blur-3xl pointer-events-none" />
+    <div className={`min-h-screen w-full flex flex-col font-sans ${pageBg}`}>
+      <a
+        href="#auth-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-emerald-600 focus:text-white focus:text-sm focus:font-semibold"
+      >
+        Skip to sign in form
+      </a>
 
-      {/* Main Split-Screen Layout matching the user's reference UI */}
-      <div className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-6 sm:px-10 lg:px-14 py-8 lg:py-12 flex flex-col justify-center">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-          
-          {/* ============================================================
-              LEFT COLUMN: HERO HEADLINE + 3D WORKSTATION ILLUSTRATION
-              ============================================================ */}
-          <div className="lg:col-span-7 flex flex-col justify-center space-y-8 relative">
-            
-            {/* Headline Section with 3D floating accent circle */}
-            <div className="relative max-w-xl">
-              {/* Floating 3D accent sphere behind text matching reference */}
-              <div className="absolute -top-6 right-8 sm:right-16 w-24 h-24 rounded-full bg-gradient-to-br from-pink-300 to-rose-200/90 shadow-lg shadow-pink-300/30 blur-[0.5px] pointer-events-none z-0" />
-
-              <div className="relative z-10 space-y-3">
-                <h1 className="text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-[#0f172a] tracking-tight leading-[1.12]">
-                  The World Most <br />
-                  <span className="text-[#0f172a]">Powerful </span>
-                  <span className="bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">
-                    Marketing OS.
-                  </span>
-                </h1>
-                <p className="text-sm sm:text-base text-[#64748b] font-medium max-w-md leading-relaxed">
-                  Scale multi-agent campaigns, autonomous publishing, and human-in-the-loop approvals with the Fastest Autonomous Growth Platform.
-                </p>
-              </div>
+      {/* Clean Minimal Top Header */}
+      <header
+        className={`w-full border-b ${
+          isDark ? 'border-neutral-800/80 bg-[#070a09]' : 'border-slate-200/80 bg-white/80'
+        }`}
+      >
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
+              S
             </div>
-
-            {/* 3D Isometric Workstation Monitor & Creative Studio Graphic */}
-            <div className="relative w-full max-w-lg mx-auto lg:mx-0 pt-2 pb-6">
-              
-              {/* Desktop Monitor SVG */}
-              <svg
-                viewBox="0 0 540 380"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="w-full h-auto drop-shadow-2xl"
-              >
-                <defs>
-                  {/* Gradients */}
-                  <linearGradient id="monitorBody" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ffffff" />
-                    <stop offset="100%" stopColor="#eef4f1" />
-                  </linearGradient>
-                  <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#f8fafc" />
-                    <stop offset="100%" stopColor="#f1f5f9" />
-                  </linearGradient>
-                  <linearGradient id="standGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#e2e8f0" />
-                    <stop offset="100%" stopColor="#cbd5e1" />
-                  </linearGradient>
-                  <linearGradient id="videoCardGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#ffffff" />
-                    <stop offset="100%" stopColor="#f8faf9" />
-                  </linearGradient>
-                  <linearGradient id="playBtnGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#10b981" />
-                    <stop offset="100%" stopColor="#059669" />
-                  </linearGradient>
-                  <linearGradient id="cameraGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ffffff" />
-                    <stop offset="100%" stopColor="#e2e8f0" />
-                  </linearGradient>
-                  <linearGradient id="keyboardGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#ffffff" />
-                    <stop offset="100%" stopColor="#e5ede8" />
-                  </linearGradient>
-
-                  {/* Soft Drop Shadows */}
-                  <filter id="softShadow" x="-10%" y="-10%" width="130%" height="130%">
-                    <feDropShadow dx="0" dy="12" stdDeviation="16" floodColor="#064e3b" floodOpacity="0.12" />
-                  </filter>
-                  <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feDropShadow dx="3" dy="8" stdDeviation="10" floodColor="#000000" floodOpacity="0.08" />
-                  </filter>
-                  <filter id="groundShadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="8" />
-                  </filter>
-                </defs>
-
-                {/* Ground Shadow underneath monitor & peripherals */}
-                <ellipse cx="230" cy="335" rx="190" ry="22" fill="#0f172a" fillOpacity="0.07" filter="url(#groundShadow)" />
-                <ellipse cx="430" cy="340" rx="45" ry="12" fill="#0f172a" fillOpacity="0.06" filter="url(#groundShadow)" />
-
-                {/* --- MONITOR STAND --- */}
-                {/* Base */}
-                <path d="M190 325 Q230 318 270 325 L285 332 Q230 338 175 332 Z" fill="url(#standGrad)" />
-                {/* Arm Stem */}
-                <path d="M218 220 L242 220 L246 324 L214 324 Z" fill="url(#standGrad)" />
-                <path d="M214 220 L246 220 L244 235 L216 235 Z" fill="#cbd5e1" opacity="0.7" />
-
-                {/* --- MONITOR CASING --- */}
-                <rect x="45" y="40" width="370" height="230" rx="22" fill="url(#monitorBody)" filter="url(#softShadow)" stroke="#e2ece6" strokeWidth="2" />
-                {/* Inner Screen Bezel */}
-                <rect x="58" y="52" width="344" height="204" rx="14" fill="url(#screenGrad)" stroke="#cbd5e1" strokeWidth="1" />
-
-                {/* Top Browser Bar */}
-                <path d="M58 52 H402 V76 H58 Z" fill="#ffffff" />
-                <line x1="58" y1="76" x2="402" y2="76" stroke="#e2e8f0" strokeWidth="1" />
-                {/* Traffic Light Dots */}
-                <circle cx="74" cy="64" r="4" fill="#ef4444" opacity="0.8" />
-                <circle cx="86" cy="64" r="4" fill="#f59e0b" opacity="0.8" />
-                <circle cx="98" cy="64" r="4" fill="#10b981" opacity="0.8" />
-                {/* Browser Search Bar Pill */}
-                <rect x="115" y="58" width="160" height="12" rx="6" fill="#f1f5f9" />
-
-                {/* --- CANVAS CONTENT INSIDE MONITOR --- */}
-                {/* 1. Color Palette Swatch Circles with Dropper */}
-                <g transform="translate(85, 115)">
-                  {/* Swatches */}
-                  <circle cx="20" cy="30" r="14" fill="#fbcfe8" />
-                  <circle cx="42" cy="18" r="14" fill="#6ee7b7" />
-                  <circle cx="36" cy="42" r="14" fill="#fde68a" />
-                  {/* Eyedropper Tool */}
-                  <g transform="translate(48, 8) rotate(45)">
-                    <rect x="0" y="0" width="8" height="22" rx="4" fill="#475569" />
-                    <circle cx="4" cy="4" r="6" fill="#334155" />
-                    <polygon points="4,28 1,22 7,22" fill="#334155" />
-                  </g>
-                </g>
-
-                {/* 2. Text Hierarchy Lines in Sincly Emerald Theme */}
-                <rect x="175" y="105" width="85" height="42" rx="8" fill="#10b981" />
-                <line x1="187" y1="116" x2="248" y2="116" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-                <line x1="187" y1="126" x2="240" y2="126" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-                <line x1="187" y1="136" x2="225" y2="136" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-
-                {/* 3. Typography "Aa" Badge */}
-                <g transform="translate(285, 170)">
-                  <rect x="0" y="0" width="55" height="42" rx="8" fill="#ffffff" stroke="#94a3b8" strokeDasharray="3 3" strokeWidth="1.5" />
-                  <text x="14" y="27" fill="#64748b" fontFamily="Inter, sans-serif" fontWeight="bold" fontSize="16">Aa</text>
-                  <circle cx="0" cy="0" r="3" fill="#10b981" />
-                  <circle cx="55" cy="0" r="3" fill="#10b981" />
-                  <circle cx="0" cy="42" r="3" fill="#10b981" />
-                  <circle cx="55" cy="42" r="3" fill="#10b981" />
-                </g>
-
-                {/* 4. Floating 3D Video Playback Card (Popping out of screen as in reference image) */}
-                <g transform="translate(310, 75)" filter="url(#cardShadow)">
-                  <rect x="0" y="0" width="105" height="105" rx="16" fill="url(#videoCardGrad)" stroke="#e2ece6" strokeWidth="1.5" />
-                  {/* Video Screen Area */}
-                  <rect x="8" y="8" width="89" height="64" rx="10" fill="#f1f5f9" />
-                  {/* 3D Play Button */}
-                  <polygon points="46,32 46,50 62,41" fill="url(#playBtnGrad)" filter="url(#softShadow)" />
-                  {/* Video Progress Bar / Status Pill */}
-                  <rect x="18" y="82" width="69" height="12" rx="6" fill="#fecdd3" />
-                  <rect x="22" y="86" width="30" height="4" rx="2" fill="#fb7185" />
-                </g>
-
-                {/* --- 3D KEYBOARD IN FRONT ON DESK --- */}
-                <g transform="translate(115, 305)" filter="url(#cardShadow)">
-                  <rect x="0" y="0" width="165" height="26" rx="8" fill="url(#keyboardGrad)" stroke="#cbd5e1" strokeWidth="1" />
-                  {/* Key rows simulation */}
-                  <line x1="8" y1="8" x2="157" y2="8" stroke="#cbd5e1" strokeWidth="3" strokeDasharray="6 3" strokeLinecap="round" />
-                  <line x1="8" y1="16" x2="157" y2="16" stroke="#cbd5e1" strokeWidth="3" strokeDasharray="8 3" strokeLinecap="round" />
-                </g>
-
-                {/* --- 3D STUDIO CAMERA ON DESK --- */}
-                <g transform="translate(360, 275)" filter="url(#cardShadow)">
-                  {/* Camera Body */}
-                  <rect x="0" y="10" width="75" height="52" rx="14" fill="url(#cameraGrad)" stroke="#cbd5e1" strokeWidth="1.5" />
-                  {/* Camera Shutter / Top button */}
-                  <rect x="10" y="4" width="16" height="7" rx="3" fill="#fb7185" />
-                  <rect x="52" y="5" width="12" height="6" rx="2" fill="#64748b" />
-                  {/* Large Camera Lens */}
-                  <circle cx="37" cy="36" r="18" fill="#ffffff" stroke="#e2e8f0" strokeWidth="2" />
-                  <circle cx="37" cy="36" r="14" fill="#fed7aa" />
-                  <circle cx="37" cy="36" r="9" fill="#1e293b" />
-                  <circle cx="34" cy="33" r="3" fill="#ffffff" opacity="0.8" />
-                </g>
-              </svg>
-            </div>
+            <span className="font-bold tracking-tight text-sm uppercase">
+              SINCLY{' '}
+              <span className={isDark ? 'text-emerald-400' : 'text-emerald-700'}>
+                OS
+              </span>
+            </span>
           </div>
 
-          {/* ============================================================
-              RIGHT COLUMN: MODERN SINCLY AUTHENTICATION CARD
-              ============================================================ */}
-          <div className="lg:col-span-5 relative flex flex-col justify-center">
-            
-            {/* 3D Floating Translucent Geometric Cube Decoration (as in reference image) */}
-            <div className="hidden sm:block absolute -right-6 top-1/2 -translate-y-8 w-20 h-20 pointer-events-none z-0">
-              <svg viewBox="0 0 100 100" fill="none" className="w-full h-full opacity-85 drop-shadow-xl animate-pulse">
-                {/* 3D Isometric Cube in Soft Rose & Mint */}
-                <path d="M50 15 L85 35 L50 55 L15 35 Z" fill="#fed7aa" fillOpacity="0.85" />
-                <path d="M15 35 L50 55 L50 90 L15 70 Z" fill="#fbcfe8" fillOpacity="0.9" />
-                <path d="M50 55 L85 35 L85 70 L50 90 Z" fill="#f472b6" fillOpacity="0.75" />
-              </svg>
-            </div>
+          <div className="flex items-center gap-2">
+            {canCancel && onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                  isDark
+                    ? 'border-neutral-800 text-slate-200 hover:bg-neutral-900'
+                    : 'border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Back to workspace</span>
+              </button>
+            )}
+            {onToggleTheme && (
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                className={`p-2 rounded-xl border cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                  isDark
+                    ? 'border-neutral-800 bg-neutral-900 text-slate-200 hover:bg-neutral-800'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {isDark ? (
+                  <Sun className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Moon className="h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
 
-            {/* Bottom floating soft pink/mint sphere */}
-            <div className="hidden sm:block absolute right-4 -bottom-6 w-14 h-14 rounded-full bg-gradient-to-tr from-pink-300 to-rose-200/90 shadow-lg shadow-pink-200/50 pointer-events-none" />
-
-            {/* Main Form Box Container */}
-            <div className="relative z-10 w-full max-w-md mx-auto space-y-6">
-              
-              {/* Top Row: Brand Monogram */}
-              <div className="flex items-center">
-                {/* Sincly Brand Monogram Pill matching reference UI */}
-                <div className="flex items-center gap-2.5">
-                  <div className="h-9 w-9 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-black text-sm shadow-md shadow-emerald-600/25">
-                    S
-                  </div>
-                  <span className="font-extrabold text-[#0f172a] tracking-tight text-sm uppercase">
-                    SINCLY <span className="text-[10px] text-emerald-600 font-mono font-bold">OS</span>
-                  </span>
-                </div>
+      {/* Main Content */}
+      <main
+        id="auth-main"
+        className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 flex items-center"
+      >
+        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          {/* Left Column: Clear Value Proposition */}
+          <section aria-labelledby="auth-hero-heading" className="lg:col-span-6 space-y-6">
+            <div className="space-y-3">
+              <div
+                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-semibold ${
+                  isDark
+                    ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}
+              >
+                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Human-in-the-loop Marketing OS</span>
               </div>
 
-              {/* Headings */}
-              <div className="space-y-1.5 pt-2">
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0f172a] tracking-tight flex items-baseline">
-                  <span>{isSignUp ? 'Sign up Now' : 'Sign in Now'}</span>
-                  <span className="text-emerald-500 text-4xl">.</span>
+              <h1
+                id="auth-hero-heading"
+                className="text-3xl sm:text-4xl lg:text-[2.65rem] font-extrabold tracking-tight leading-[1.15]"
+              >
+                Autonomous marketing,{' '}
+                <span className={isDark ? 'text-emerald-400' : 'text-emerald-700'}>
+                  built for clarity.
+                </span>
+              </h1>
+
+              <p className={`text-sm sm:text-base max-w-md leading-relaxed ${mutedText}`}>
+                Plan campaigns, publish across channels, and review every AI action from one calm command center.
+              </p>
+            </div>
+
+            <ul className="space-y-4 pt-1">
+              {VALUE_PILLARS.map(item => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.title} className="flex items-start gap-3.5">
+                    <div
+                      className={`h-9 w-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${
+                        isDark
+                          ? 'bg-neutral-900 border-neutral-800 text-emerald-400'
+                          : 'bg-white border-slate-200 text-emerald-700'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <h2 className="text-sm font-semibold">{item.title}</h2>
+                      <p className={`text-xs sm:text-sm leading-relaxed ${mutedText}`}>
+                        {item.description}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          {/* Right Column: Accessible Authentication Card */}
+          <section aria-labelledby="auth-card-heading" className="lg:col-span-6 w-full">
+            <div className={`w-full max-w-md mx-auto rounded-2xl border p-6 sm:p-8 space-y-6 ${cardBg}`}>
+              {/* Accessible Mode Switcher */}
+              <div
+                role="tablist"
+                aria-label="Authentication mode"
+                className={`grid grid-cols-2 p-1 rounded-xl border ${
+                  isDark
+                    ? 'bg-[#090d0b] border-neutral-800'
+                    : 'bg-slate-100 border-slate-200'
+                }`}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!isSignUp}
+                  onClick={() => switchAuthMode(false)}
+                  className={`py-2 px-3 rounded-lg text-xs sm:text-sm font-semibold cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                    !isSignUp
+                      ? isDark
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white text-slate-900 shadow-xs'
+                      : isDark
+                        ? 'text-slate-300 hover:text-white'
+                        : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={isSignUp}
+                  onClick={() => switchAuthMode(true)}
+                  className={`py-2 px-3 rounded-lg text-xs sm:text-sm font-semibold cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                    isSignUp
+                      ? isDark
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white text-slate-900 shadow-xs'
+                      : isDark
+                        ? 'text-slate-300 hover:text-white'
+                        : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Create account
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <h2 id="auth-card-heading" className="text-xl sm:text-2xl font-bold tracking-tight">
+                  {isSignUp ? 'Create your workspace' : 'Sign in to Sincly'}
                 </h2>
-                <p className="text-xs sm:text-sm text-[#64748b] font-medium">
+                <p className={`text-xs sm:text-sm ${mutedText}`}>
                   {isSignUp
-                    ? 'Create your Sincly workspace account below'
-                    : 'Enter your detail below'}
+                    ? 'Start with a quick 3-step brand setup after creating your account.'
+                    : 'Enter your email and password to open your workspace.'}
                 </p>
               </div>
 
-              {/* Error Message Alert */}
               {errorMessage && (
-                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-start gap-2.5 shadow-xs">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" />
+                <div
+                  id="auth-form-error"
+                  role="alert"
+                  aria-live="assertive"
+                  className={`p-3.5 rounded-xl border text-xs sm:text-sm font-medium flex items-start gap-2.5 ${
+                    isDark
+                      ? 'bg-rose-950/60 border-rose-800 text-rose-200'
+                      : 'bg-rose-50 border-rose-200 text-rose-800'
+                  }`}
+                >
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-500" aria-hidden="true" />
                   <span>{errorMessage}</span>
                 </div>
               )}
 
-              {/* Success Message Alert */}
               {successMessage && (
-                <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-start gap-2.5 shadow-xs">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className={`p-3.5 rounded-xl border text-xs sm:text-sm font-medium flex items-start gap-2.5 ${
+                    isDark
+                      ? 'bg-emerald-950/60 border-emerald-800 text-emerald-200'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  }`}
+                >
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" aria-hidden="true" />
                   <span>{successMessage}</span>
                 </div>
               )}
 
-              {/* Authentication Form */}
-              <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-                
-                {/* 1. Full Name Field (Sign Up Mode Only) */}
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
                 {isSignUp && (
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-[#1e293b]">
-                      Full Name
+                    <label htmlFor="auth-name" className="block text-xs sm:text-sm font-semibold">
+                      Full name
                     </label>
-                    <div className="relative flex items-center rounded-2xl bg-white border border-[#e2e8f0] shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                      <div className="pl-4 pr-2 text-[#64748b]">
-                        <User className="h-4 w-4 text-emerald-600" />
-                      </div>
+                    <div className="relative">
+                      <User
+                        className={`h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${subtleText}`}
+                        aria-hidden="true"
+                      />
                       <input
+                        id="auth-name"
                         type="text"
-                        required
+                        autoComplete="name"
                         value={name}
                         onChange={e => setName(e.target.value)}
-                        placeholder="e.g. Belal Hossain"
-                        className="w-full py-3.5 pr-4 text-xs font-sans text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
+                        placeholder="e.g. Alex Rivera"
+                        aria-describedby={errorMessage ? 'auth-form-error' : undefined}
+                        className={`w-full min-h-[44px] pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${inputSurface}`}
                       />
                     </div>
                   </div>
                 )}
 
-                {/* 2. Username or Email Input Field matching reference image card */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[#1e293b]">
-                    Username or Email
+                  <label htmlFor="auth-email" className="block text-xs sm:text-sm font-semibold">
+                    Work email
                   </label>
-                  <div className="relative flex items-center rounded-2xl bg-white border border-[#e2e8f0] shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                    <div className="pl-4 pr-2 text-[#64748b]">
-                      <Mail className="h-4 w-4 text-emerald-600" />
-                    </div>
+                  <div className="relative">
+                    <Mail
+                      className={`h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${subtleText}`}
+                      aria-hidden="true"
+                    />
                     <input
+                      id="auth-email"
                       type="email"
                       required
+                      autoComplete="email"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       placeholder="name@company.com"
-                      className="w-full py-3.5 pr-4 text-xs font-mono text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
+                      aria-invalid={Boolean(errorMessage && !email.trim())}
+                      aria-describedby={errorMessage ? 'auth-form-error' : undefined}
+                      className={`w-full min-h-[44px] pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${inputSurface}`}
                     />
                   </div>
                 </div>
 
-                {/* 3. Password Input Field matching reference image card */}
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[#1e293b]">
+                  <label htmlFor="auth-password" className="block text-xs sm:text-sm font-semibold">
                     Password
                   </label>
-                  <div className="relative flex items-center rounded-2xl bg-white border border-[#e2e8f0] shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                    <div className="pl-4 pr-2 text-[#64748b]">
-                      <Lock className="h-4 w-4 text-emerald-600" />
-                    </div>
+                  <div className="relative">
+                    <Lock
+                      className={`h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${subtleText}`}
+                      aria-hidden="true"
+                    />
                     <input
+                      id="auth-password"
                       type={showPassword ? 'text' : 'password'}
                       required
+                      autoComplete={isSignUp ? 'new-password' : 'current-password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      className="w-full py-3.5 pr-10 text-xs font-mono text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
+                      placeholder={isSignUp ? 'Minimum 6 characters' : 'Enter your password'}
+                      aria-invalid={Boolean(errorMessage && !password.trim())}
+                      aria-describedby={
+                        [errorMessage ? 'auth-form-error' : '', isSignUp ? 'auth-password-hint' : '']
+                          .filter(Boolean)
+                          .join(' ') || undefined
+                      }
+                      className={`w-full min-h-[44px] pl-10 pr-11 py-2.5 rounded-xl border text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${inputSurface}`}
                     />
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3.5 text-[#64748b] hover:text-[#0f172a] transition-colors p-1"
+                      onClick={() => setShowPassword(prev => !prev)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      aria-pressed={showPassword}
+                      className={`absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                        isDark
+                          ? 'text-slate-300 hover:bg-neutral-800 hover:text-white'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
                     >
                       {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
+                        <EyeOff className="h-4 w-4" aria-hidden="true" />
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-4 w-4" aria-hidden="true" />
                       )}
                     </button>
                   </div>
+                  {isSignUp && (
+                    <p id="auth-password-hint" className={`text-xs ${subtleText}`}>
+                      Use at least 6 characters.
+                    </p>
+                  )}
                 </div>
 
-                {/* 4. Confirm Password (Sign Up Mode Only) */}
                 {isSignUp && (
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-[#1e293b]">
-                      Confirm Password
+                    <label htmlFor="auth-confirm-password" className="block text-xs sm:text-sm font-semibold">
+                      Confirm password
                     </label>
-                    <div className="relative flex items-center rounded-2xl bg-white border border-[#e2e8f0] shadow-sm focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
-                      <div className="pl-4 pr-2 text-[#64748b]">
-                        <Lock className="h-4 w-4 text-emerald-600" />
-                      </div>
+                    <div className="relative">
+                      <Lock
+                        className={`h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${subtleText}`}
+                        aria-hidden="true"
+                      />
                       <input
-                        type={showPassword ? 'text' : 'password'}
+                        id="auth-confirm-password"
+                        type={showConfirmPassword ? 'text' : 'password'}
                         required
+                        autoComplete="new-password"
                         value={confirmPassword}
                         onChange={e => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter password"
-                        className="w-full py-3.5 pr-4 text-xs font-mono text-[#0f172a] placeholder:text-[#94a3b8] bg-transparent focus:outline-none"
+                        placeholder="Re-enter your password"
+                        aria-invalid={Boolean(
+                          confirmPassword && password.trim() !== confirmPassword.trim()
+                        )}
+                        className={`w-full min-h-[44px] pl-10 pr-11 py-2.5 rounded-xl border text-sm transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${inputSurface}`}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(prev => !prev)}
+                        aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                        aria-pressed={showConfirmPassword}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                          isDark
+                            ? 'text-slate-300 hover:bg-neutral-800 hover:text-white'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                        }`}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4" aria-hidden="true" />
+                        ) : (
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}
 
-                {/* Remember Me Checkbox */}
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="checkbox"
-                    id="rememberSession"
-                    checked={rememberMe}
-                    onChange={e => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded-md border-neutral-300 text-emerald-600 focus:ring-emerald-500/30 cursor-pointer"
-                  />
-                  <label htmlFor="rememberSession" className="text-xs text-[#475569] hover:text-[#0f172a] font-medium cursor-pointer select-none transition-colors">
-                    Remember me
-                  </label>
-                </div>
-
-                {/* CTA Submit Button & Highlighted Sign Up Callout */}
-                <div className="pt-2 space-y-3">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Sparkles className="h-4 w-4 animate-spin text-white" />
-                        <span>{isSignUp ? 'Creating account...' : 'Signing in...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>{isSignUp ? 'Sign up' : 'Sign in'}</span>
-                      </>
-                    )}
-                  </button>
-
-                  {/* Highlighted Account Switch Callout with crystal-clear contrast and crisp hover */}
-                  <div
-                    onClick={toggleAuthMode}
-                    className="group p-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100/90 border-2 border-emerald-300 hover:border-emerald-500 text-center shadow-sm hover:shadow transition-all duration-200 cursor-pointer"
-                  >
-                    <button
-                      type="button"
-                      className="text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer pointer-events-none"
-                      tabIndex={-1}
+                <div className="flex items-center justify-between pt-0.5">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="rememberSession"
+                      checked={rememberMe}
+                      onChange={e => setRememberMe(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 accent-emerald-600 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    />
+                    <label
+                      htmlFor="rememberSession"
+                      className={`text-xs sm:text-sm font-medium cursor-pointer ${mutedText}`}
                     >
-                      {isSignUp ? (
-                        <span className="text-[#0f172a] font-bold group-hover:text-black transition-colors" style={{ color: '#0f172a' }}>
-                          Already have an account?{' '}
-                          <span className="text-[#047857] group-hover:text-[#064e3b] underline underline-offset-4 font-extrabold transition-colors" style={{ color: '#047857' }}>
-                            Sign in now
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-[#0f172a] font-bold group-hover:text-black transition-colors" style={{ color: '#0f172a' }}>
-                          Don't have an account?{' '}
-                          <span className="text-[#047857] group-hover:text-[#064e3b] underline underline-offset-4 font-extrabold transition-colors" style={{ color: '#047857' }}>
-                            Sign up now
-                          </span>
-                        </span>
-                      )}
-                    </button>
+                      Keep me signed in
+                    </label>
                   </div>
                 </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full min-h-[46px] px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold cursor-pointer transition-colors duration-150 motion-reduce:transition-none flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                      <span>{isSignUp ? 'Creating workspace...' : 'Signing in...'}</span>
+                    </>
+                  ) : (
+                    <span>{isSignUp ? 'Create account & continue' : 'Sign in'}</span>
+                  )}
+                </button>
               </form>
+
+              <div
+                className={`pt-4 border-t text-center text-xs sm:text-sm ${
+                  isDark ? 'border-neutral-800 text-slate-300' : 'border-slate-200 text-slate-600'
+                }`}
+              >
+                {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                <button
+                  type="button"
+                  onClick={() => switchAuthMode(!isSignUp)}
+                  className={`font-semibold underline underline-offset-4 cursor-pointer rounded px-1 py-0.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 ${
+                    isDark
+                      ? 'text-emerald-400 hover:text-emerald-300'
+                      : 'text-emerald-700 hover:text-emerald-800'
+                  }`}
+                >
+                  {isSignUp ? 'Sign in' : 'Create an account'}
+                </button>
+              </div>
             </div>
-          </div>
-
+          </section>
         </div>
-      </div>
+      </main>
 
-      {/* Clean Minimalist Bottom Footer */}
-      <footer className="relative z-10 w-full py-4 text-center text-xs text-[#64748b] font-medium">
+      <footer className={`w-full py-4 px-4 text-center text-xs font-medium ${subtleText}`}>
         Sincly AI Marketing OS · Autonomous Multi-Agent Governance
       </footer>
     </div>

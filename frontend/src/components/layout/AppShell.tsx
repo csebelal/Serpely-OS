@@ -31,6 +31,7 @@ import {
   DEFAULT_ADMIN_USER
 } from '../../data/rbac-data';
 import { LoginView } from '../auth/LoginView';
+import { OnboardingView, OnboardingResult } from '../auth/OnboardingView';
 import { apiClient } from '../../services/apiClient';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import {
@@ -120,21 +121,30 @@ export const PATH_TO_VIEW: Record<string, ViewId> = {
   '/settings': 'settings'
 };
 
-export const getViewFromPathname = (pathname: string): { view: ViewId; isLogin: boolean } => {
+export const getViewFromPathname = (
+  pathname: string
+): {
+  view: ViewId;
+  isLogin: boolean;
+  initialAuthMode?: 'signin' | 'signup';
+  isOnboarding?: boolean;
+} => {
   const norm = (pathname || '').replace(/\/+$/, '') || '/';
-  if (
-    norm.toLowerCase() === '/login' ||
-    norm.toLowerCase() === '/signup' ||
-    norm === '/' ||
-    norm === ''
-  ) {
-    return { view: 'dashboard', isLogin: true };
+  const lower = norm.toLowerCase();
+  if (lower === '/signup') {
+    return { view: 'dashboard', isLogin: true, initialAuthMode: 'signup', isOnboarding: false };
   }
-  const found = PATH_TO_VIEW[norm.toLowerCase()];
+  if (lower === '/onboarding') {
+    return { view: 'dashboard', isLogin: false, isOnboarding: true };
+  }
+  if (lower === '/login' || norm === '/' || norm === '') {
+    return { view: 'dashboard', isLogin: true, initialAuthMode: 'signin', isOnboarding: false };
+  }
+  const found = PATH_TO_VIEW[lower];
   if (found) {
-    return { view: found, isLogin: false };
+    return { view: found, isLogin: false, isOnboarding: false };
   }
-  return { view: 'dashboard', isLogin: false };
+  return { view: 'dashboard', isLogin: false, isOnboarding: false };
 };
 
 export const AppShell: React.FC = () => {
@@ -243,6 +253,12 @@ export const AppShell: React.FC = () => {
     } catch {}
     return true;
   });
+  const [authInitialMode, setAuthInitialMode] = useState<'signin' | 'signup'>(
+    initialRoute.initialAuthMode || 'signin'
+  );
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() =>
+    Boolean(initialRoute.isOnboarding)
+  );
 
   const handleNavigate = (view: ViewId, replace = false) => {
     setActiveView(view);
@@ -260,8 +276,9 @@ export const AppShell: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     const saved = localStorage.getItem('serpely_authenticated_user');
-    if (window.location.pathname === '' || window.location.pathname === '/' || !saved) {
-      if (window.location.pathname !== '/login') {
+    const currentPath = window.location.pathname.toLowerCase();
+    if (currentPath === '' || currentPath === '/' || !saved) {
+      if (currentPath !== '/login' && currentPath !== '/signup') {
         window.history.replaceState({ isLogin: true }, '', '/login');
       }
       setIsAuthScreenOpen(true);
@@ -271,6 +288,10 @@ export const AppShell: React.FC = () => {
       const route = getViewFromPathname(window.location.pathname);
       setActiveView(route.view);
       setIsAuthScreenOpen(route.isLogin);
+      if (route.initialAuthMode) {
+        setAuthInitialMode(route.initialAuthMode);
+      }
+      setIsOnboardingOpen(Boolean(route.isOnboarding));
     };
 
     const handleUnauthorized = () => {
@@ -299,18 +320,49 @@ export const AppShell: React.FC = () => {
     showToast(`Workspace role switched to ${user.title || newRole.toUpperCase()}.`);
   };
 
-  const handleLogin = (user: AuthUser) => {
+  const handleLogin = (user: AuthUser, options?: { isNewUser?: boolean }) => {
     setCurrentUser(user);
     setIsAuthScreenOpen(false);
     try {
       localStorage.setItem('serpely_authenticated_user', JSON.stringify(user));
       localStorage.setItem('serpely_active_role', user.role);
     } catch {}
+
+    if (options?.isNewUser) {
+      setIsOnboardingOpen(true);
+      if (typeof window !== 'undefined' && window.location.pathname !== '/onboarding') {
+        window.history.pushState({ isOnboarding: true }, '', '/onboarding');
+      }
+      showToast(`Welcome to Sincly, ${user.name}! Let's personalize your workspace.`);
+      return;
+    }
+
+    setIsOnboardingOpen(false);
     const targetPath = VIEW_TO_PATH[activeView] || '/dashboard';
     if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
       window.history.pushState({ view: activeView }, '', targetPath);
     }
     showToast(`Signed in as ${user.name} (${user.role.toUpperCase()}). Full permissions active.`);
+  };
+
+  const handleCompleteOnboarding = (result: OnboardingResult) => {
+    setBrandProfile(result.brandProfile);
+    persistPartialState({ brandProfile: result.brandProfile });
+    try {
+      localStorage.setItem(`serpely_onboarding_completed_${currentUser.email}`, 'true');
+    } catch {}
+    setIsOnboardingOpen(false);
+    handleNavigate('dashboard');
+    showToast(`Workspace "${result.brandProfile.name}" is ready!`);
+  };
+
+  const handleSkipOnboarding = () => {
+    try {
+      localStorage.setItem(`serpely_onboarding_completed_${currentUser.email}`, 'true');
+    } catch {}
+    setIsOnboardingOpen(false);
+    handleNavigate('dashboard');
+    showToast('Onboarding skipped. Update brand details anytime in Settings.');
   };
 
   const handleLogout = () => {
@@ -836,13 +888,35 @@ export const AppShell: React.FC = () => {
     }
   };
 
-  // When authentication screen is open, return LoginView directly with ZERO dashboard mounting or flicker
+  // When authentication or onboarding screen is open, render directly with ZERO dashboard mounting or flicker
   if (isAuthScreenOpen) {
+    let hasSavedSession = false;
+    try {
+      hasSavedSession = Boolean(localStorage.getItem('serpely_authenticated_user'));
+    } catch {}
+
     return (
       <LoginView
         currentRole={currentUser.role}
+        initialMode={authInitialMode}
+        appTheme={appTheme}
+        canCancel={hasSavedSession}
+        onToggleTheme={handleToggleTheme}
         onLogin={handleLogin}
         onCancel={handleCloseLogin}
+      />
+    );
+  }
+
+  if (isOnboardingOpen) {
+    return (
+      <OnboardingView
+        user={currentUser}
+        brandProfile={brandProfile}
+        appTheme={appTheme}
+        onToggleTheme={handleToggleTheme}
+        onComplete={handleCompleteOnboarding}
+        onSkip={handleSkipOnboarding}
       />
     );
   }

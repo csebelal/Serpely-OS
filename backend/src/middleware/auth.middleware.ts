@@ -66,18 +66,17 @@ export function authenticateToken(
       req.headers['x-user-email'] = decoded.email;
       return next();
     } catch (err: any) {
-      return res.status(401).json({ error: 'Session expired or invalid authentication token. Please sign in again.' });
+      return res.status(401).json({
+        authenticated: false,
+        error: 'Session expired or invalid authentication token. Please sign in again.'
+      });
     }
   }
 
-  // Graceful fallback for x-user-email header on trusted calls
-  const headerEmail = (req.headers['x-user-email'] as string || '').trim().toLowerCase();
-  if (headerEmail) {
-    (req as any).user = { email: headerEmail, role: 'owner' };
-    return next();
-  }
-
-  return res.status(401).json({ error: 'Authentication required. Please sign in.' });
+  return res.status(401).json({
+    authenticated: false,
+    error: 'Authentication required. Please sign in.'
+  });
 }
 
 export function authorizeRoles(...allowedRoles: string[]) {

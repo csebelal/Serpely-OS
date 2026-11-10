@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 import {
   isValidEmail,
   sanitizeInput,
   resolveUserEmail,
+  authenticateToken,
   JWT_SECRET,
   DEFAULT_ADMIN_EMAIL
 } from '../src/middleware/auth.middleware';
@@ -67,6 +68,72 @@ describe('Authentication & Security Middleware', () => {
         body: {}
       };
       expect(resolveUserEmail(req)).toBe(DEFAULT_ADMIN_EMAIL);
+    });
+  });
+
+  describe('authenticateToken security enforcement', () => {
+    it('rejects unauthenticated requests with 401', () => {
+      const req: any = { headers: {} };
+      let statusCode = 0;
+      let jsonPayload: any = null;
+      const res: any = {
+        status: (code: number) => {
+          statusCode = code;
+          return {
+            json: (payload: any) => {
+              jsonPayload = payload;
+            }
+          };
+        }
+      };
+      const next = vi.fn();
+
+      authenticateToken(req, res, next);
+      expect(statusCode).toBe(401);
+      expect(jsonPayload?.authenticated).toBe(false);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('rejects spoofed x-user-email without valid token with 401', () => {
+      const req: any = {
+        headers: {
+          'x-user-email': 'support@serpely.com'
+        }
+      };
+      let statusCode = 0;
+      let jsonPayload: any = null;
+      const res: any = {
+        status: (code: number) => {
+          statusCode = code;
+          return {
+            json: (payload: any) => {
+              jsonPayload = payload;
+            }
+          };
+        }
+      };
+      const next = vi.fn();
+
+      authenticateToken(req, res, next);
+      expect(statusCode).toBe(401);
+      expect(jsonPayload?.authenticated).toBe(false);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('allows valid signed JWT Bearer token and populates req.user', () => {
+      const token = jwt.sign({ email: 'belal@serpely.com', role: 'owner' }, JWT_SECRET);
+      const req: any = {
+        headers: {
+          authorization: `Bearer ${token}`
+        }
+      };
+      const res: any = {};
+      const next = vi.fn();
+
+      authenticateToken(req, res, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(req.user?.email).toBe('belal@serpely.com');
+      expect(req.user?.role).toBe('owner');
     });
   });
 });
