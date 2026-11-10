@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import { resolveUserEmail, DEFAULT_ADMIN_EMAIL } from '../middleware/auth.middleware';
+import { resolveUserEmail, DEFAULT_ADMIN_EMAIL, authenticateToken } from '../middleware/auth.middleware';
 
 export interface StateRouterOptions {
   getUserWorkspace: (email: string) => any;
@@ -37,8 +37,8 @@ export function createStateRouter(options: StateRouterOptions): Router {
     'messagingConfig'
   ];
 
-  // GET /api/state
-  router.get('/', (req, res) => {
+  // GET /api/state (Protected: Requires Authenticated User)
+  router.get('/', authenticateToken, (req, res) => {
     try {
       const userEmail = resolveUserEmail(req);
       const userDb = options.getUserWorkspace(userEmail);
@@ -53,8 +53,8 @@ export function createStateRouter(options: StateRouterOptions): Router {
     }
   });
 
-  // PUT /api/state
-  router.put('/', async (req, res) => {
+  // PUT /api/state (Protected: Requires Authenticated User)
+  router.put('/', authenticateToken, async (req, res) => {
     try {
       const userEmail = resolveUserEmail(req);
       const userDb = options.getUserWorkspace(userEmail);

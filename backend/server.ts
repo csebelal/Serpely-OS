@@ -2156,7 +2156,7 @@ async function startServer() {
   }
 
   // Save OAuth App Credentials, Direct Access Tokens, or SMTP Server Settings from UI
-  app.post('/api/integrations/credentials', async (req, res) => {
+  app.post('/api/integrations/credentials', authenticateToken, authorizeRoles('owner'), async (req, res) => {
     ensureOAuthSessions();
     const { provider, config = {} } = req.body || {};
     const prov = String(provider || '').toLowerCase();
@@ -2590,7 +2590,7 @@ async function startServer() {
   });
 
   // Remove / Disconnect credentials for a provider and clean from .env & database
-  app.post('/api/integrations/credentials/remove', async (req, res) => {
+  app.post('/api/integrations/credentials/remove', authenticateToken, authorizeRoles('owner'), async (req, res) => {
     ensureOAuthSessions();
     const { provider } = req.body || {};
     const prov = String(provider || '').toLowerCase();
@@ -2766,40 +2766,40 @@ async function startServer() {
     });
   });
 
-  // Settings Credentials Vault API
-  app.get('/api/settings/credentials', (req, res) => {
+  // Settings Credentials Vault API (Protected: Requires Authenticated Owner)
+  app.get('/api/settings/credentials', authenticateToken, authorizeRoles('owner'), (req, res) => {
     ensureOAuthSessions();
     const live = getLiveCredentials();
     const geminiKey = process.env.GEMINI_API_KEY || getEnvFallback('GEMINI_API_KEY') || '';
     const geminiImageKey = live.geminiImageApiKey || process.env.GEMINI_IMAGE_API_KEY || getEnvFallback('GEMINI_IMAGE_API_KEY') || '';
     res.json({
-      geminiApiKey: geminiKey,
+      geminiApiKey: geminiKey ? maskSecret(geminiKey) : '',
       geminiApiKeyMasked: geminiKey ? `${geminiKey.slice(0, 6)}••••${geminiKey.slice(-4)}` : '',
       geminiApiKeyConfigured: Boolean(geminiKey),
-      geminiImageApiKey: geminiImageKey,
+      geminiImageApiKey: geminiImageKey ? maskSecret(geminiImageKey) : '',
       geminiImageApiKeyMasked: geminiImageKey ? `${geminiImageKey.slice(0, 6)}••••${geminiImageKey.slice(-4)}` : '',
       geminiImageApiKeyConfigured: Boolean(geminiImageKey),
-      facebookClientId: live.facebookClientId,
+      facebookClientId: live.facebookClientId ? maskSecret(live.facebookClientId) : '',
       facebookClientSecret: live.facebookClientSecret ? '••••••••' : '',
       facebookConfigured: Boolean(live.facebookClientId && live.facebookClientSecret),
-      linkedinClientId: live.linkedinClientId,
+      linkedinClientId: live.linkedinClientId ? maskSecret(live.linkedinClientId) : '',
       linkedinClientSecret: live.linkedinClientSecret ? '••••••••' : '',
       linkedinConfigured: Boolean(live.linkedinClientId && live.linkedinClientSecret),
-      googleClientId: live.googleClientId,
+      googleClientId: live.googleClientId ? maskSecret(live.googleClientId) : '',
       googleConfigured: Boolean(live.googleClientId),
       smtpHost: db.oauthSessions.smtp?.host && db.oauthSessions.smtp.host !== 'smtp.yourdomain.com' ? db.oauthSessions.smtp.host : '',
       smtpUser: db.oauthSessions.smtp?.user && db.oauthSessions.smtp.user !== 'hello@yourdomain.com' ? db.oauthSessions.smtp.user : '',
       smtpConfigured: Boolean(db.oauthSessions.smtp?.verified),
-      elevenlabsApiKey: live.elevenlabsApiKey,
+      elevenlabsApiKey: live.elevenlabsApiKey ? maskSecret(live.elevenlabsApiKey) : '',
       elevenlabsApiKeyMasked: live.elevenlabsApiKey ? `${live.elevenlabsApiKey.slice(0, 4)}••••${live.elevenlabsApiKey.slice(-4)}` : '',
       elevenlabsConfigured: Boolean(live.elevenlabsApiKey),
-      heygenApiKey: live.heygenApiKey,
+      heygenApiKey: live.heygenApiKey ? maskSecret(live.heygenApiKey) : '',
       heygenApiKeyMasked: live.heygenApiKey ? `${live.heygenApiKey.slice(0, 4)}••••${live.heygenApiKey.slice(-4)}` : '',
       heygenConfigured: Boolean(live.heygenApiKey)
     });
   });
 
-  app.post('/api/settings/credentials', async (req, res) => {
+  app.post('/api/settings/credentials', authenticateToken, authorizeRoles('owner'), async (req, res) => {
     const {
       geminiApiKey,
       geminiImageApiKey,
@@ -2856,13 +2856,13 @@ async function startServer() {
   });
 
   // ============================================================================
-  // External PostgreSQL Database Management
+  // External PostgreSQL Database Management (Protected: Requires Authenticated Owner)
   // ============================================================================
-  app.get('/api/settings/database', (req, res) => {
+  app.get('/api/settings/database', authenticateToken, authorizeRoles('owner'), (req, res) => {
     res.json(getDbConnectionInfo());
   });
 
-  app.post('/api/settings/database', async (req, res) => {
+  app.post('/api/settings/database', authenticateToken, authorizeRoles('owner'), async (req, res) => {
     const { databaseUrl = '' } = req.body || {};
     const cleanUrl = String(databaseUrl).trim();
 
@@ -5178,7 +5178,9 @@ Return ONLY valid JSON matching this exact structure:
   // ============================================================================
   // 4. Social Pages Management & Active Page Selection Endpoints
   // ============================================================================
-  app.get('/api/social/pages', (req, res) => {
+  // Multi-Account Social Pages Management (Protected: Requires Authenticated User)
+  // ============================================================================
+  app.get('/api/social/pages', authenticateToken, (req, res) => {
     // Sanitize any opaque sub 404 handles on personal LinkedIn pages
     if (db.connectedPages) {
       db.connectedPages.forEach(p => {
@@ -5192,7 +5194,7 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  app.post('/api/social/pages/update-handle', (req, res) => {
+  app.post('/api/social/pages/update-handle', authenticateToken, (req, res) => {
     const { pageId, pageHandle } = req.body || {};
     if (!pageId || !pageHandle) {
       return res.status(400).json({ error: 'Missing pageId or pageHandle parameter' });
@@ -5232,7 +5234,7 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  app.post('/api/social/pages/update-followers', (req, res) => {
+  app.post('/api/social/pages/update-followers', authenticateToken, (req, res) => {
     const { pageId, followersCount } = req.body || {};
     if (!pageId || typeof followersCount !== 'number') {
       return res.status(400).json({ error: 'Missing pageId or valid followersCount number' });
@@ -5259,7 +5261,7 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  app.post('/api/social/pages/add-company', (req, res) => {
+  app.post('/api/social/pages/add-company', authenticateToken, (req, res) => {
     const { companyName, companyIdOrSlug, followersCount } = req.body || {};
     if (!companyName || typeof companyName !== 'string') {
       return res.status(400).json({ error: 'Missing companyName parameter' });
@@ -5753,7 +5755,7 @@ Return ONLY valid JSON matching this exact structure:
   });
 
   // Explicit Social Media Account Connect / Login
-  app.post('/api/social/connect', async (req, res) => {
+  app.post('/api/social/connect', authenticateToken, async (req, res) => {
     ensureOAuthSessions();
     const { platform, pageId } = req.body || {};
     const targetPlatform = platform ? String(platform).trim() : null;
@@ -5816,8 +5818,8 @@ Return ONLY valid JSON matching this exact structure:
   // Direct Scheduling Connector Endpoints (Threads, Bluesky, TikTok & Omnichannel)
   // ============================================================================
 
-  // 1. Get Scheduled Queue
-  app.get('/api/social/scheduling/queue', (req, res) => {
+  // 1. Get Scheduled Queue (Protected: Requires Authenticated User)
+  app.get('/api/social/scheduling/queue', authenticateToken, (req, res) => {
     const platform = req.query.platform as string | undefined;
     const queue = schedulingEngine.getQueue(platform);
     res.json({
@@ -5828,8 +5830,8 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  // 2. Schedule a New Post
-  app.post('/api/social/scheduling/create', (req, res) => {
+  // 2. Schedule a New Post (Protected: Requires Authenticated User)
+  app.post('/api/social/scheduling/create', authenticateToken, (req, res) => {
     const {
       platform,
       content,
@@ -5876,8 +5878,8 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  // 3. Immediately Dispatch a Scheduled Post via Connector
-  app.post('/api/social/scheduling/:id/dispatch', async (req, res) => {
+  // 3. Immediately Dispatch a Scheduled Post via Connector (Protected)
+  app.post('/api/social/scheduling/:id/dispatch', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const result = await schedulingEngine.dispatchImmediately(id, db.connectedPages || []);
     saveDb(db);
@@ -5888,8 +5890,8 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  // 4. Cancel / Delete Scheduled Post
-  app.delete('/api/social/scheduling/:id', (req, res) => {
+  // 4. Cancel / Delete Scheduled Post (Protected)
+  app.delete('/api/social/scheduling/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     const deleted = schedulingEngine.deletePost(id);
     saveDb(db);
@@ -5899,8 +5901,8 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  // 5. Update / Reschedule Post
-  app.patch('/api/social/scheduling/:id', (req, res) => {
+  // 5. Update / Reschedule Post (Protected)
+  app.patch('/api/social/scheduling/:id', authenticateToken, (req, res) => {
     const { id } = req.params;
     const { content, scheduledTimestamp, scheduledTimeFormatted, dayOfWeek } = req.body || {};
     const queue = schedulingEngine.getQueue();
@@ -6691,8 +6693,8 @@ Return ONLY valid JSON matching this exact structure:
     });
   });
 
-  // Delete Social Post Endpoint (Removes from Sincly and attempts live delete on LinkedIn if ID present)
-  app.delete('/api/social/posts/:id', async (req, res) => {
+  // Delete Social Post Endpoint (Protected: Requires Authenticated User)
+  app.delete('/api/social/posts/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const postIndex = (db.pagePosts || []).findIndex(p => p.id === id);
     if (postIndex === -1) {
@@ -8548,7 +8550,9 @@ Return JSON with:
   // ============================================================================
   // 12BB. Slack & Discord Enterprise Messaging Hub Endpoints
   // ============================================================================
-  app.get('/api/integrations/messaging/config', (_req, res) => {
+  // Messaging Integrations (Protected: Requires Authenticated Owner)
+  // ============================================================================
+  app.get('/api/integrations/messaging/config', authenticateToken, authorizeRoles('owner'), (_req, res) => {
     if (!db.messagingConfig) {
       db.messagingConfig = structuredClone(mockMessagingConfig);
       saveDb(db);
@@ -8556,7 +8560,7 @@ Return JSON with:
     res.json({ success: true, config: db.messagingConfig });
   });
 
-  app.post('/api/integrations/slack/config', (req, res) => {
+  app.post('/api/integrations/slack/config', authenticateToken, authorizeRoles('owner'), (req, res) => {
     if (!db.messagingConfig) {
       db.messagingConfig = structuredClone(mockMessagingConfig);
     }
@@ -8568,7 +8572,7 @@ Return JSON with:
     res.json({ success: true, slack: db.messagingConfig.slack, config: db.messagingConfig });
   });
 
-  app.post('/api/integrations/slack/test', async (req, res) => {
+  app.post('/api/integrations/slack/test', authenticateToken, authorizeRoles('owner'), async (req, res) => {
     try {
       const { webhookUrl, botToken, defaultChannel, message } = req.body || {};
       const slackConfig: SlackConfig = {
@@ -8608,7 +8612,7 @@ Return JSON with:
     }
   });
 
-  app.post('/api/integrations/discord/config', (req, res) => {
+  app.post('/api/integrations/discord/config', authenticateToken, authorizeRoles('owner'), (req, res) => {
     if (!db.messagingConfig) {
       db.messagingConfig = structuredClone(mockMessagingConfig);
     }
@@ -8620,7 +8624,7 @@ Return JSON with:
     res.json({ success: true, discord: db.messagingConfig.discord, config: db.messagingConfig });
   });
 
-  app.post('/api/integrations/discord/test', async (req, res) => {
+  app.post('/api/integrations/discord/test', authenticateToken, authorizeRoles('owner'), async (req, res) => {
     try {
       const { webhookUrl, botToken, defaultChannel, message } = req.body || {};
       const discordConfig: DiscordConfig = {
@@ -9329,7 +9333,7 @@ Return a structured Brand Profile JSON with:
     res.json({ success: true, doc: newDoc, state: db });
   });
 
-  app.post('/api/hub/delete-doc', (req, res) => {
+  app.post('/api/hub/delete-doc', authenticateToken, (req, res) => {
     const { docId } = req.body || {};
     db.brandProfile.knowledgeDocs = (db.brandProfile.knowledgeDocs || []).filter(
       (d) => d.id !== docId
@@ -9338,7 +9342,7 @@ Return a structured Brand Profile JSON with:
     res.json({ success: true, state: db });
   });
 
-  app.post('/api/hub/memories', (req, res) => {
+  app.post('/api/hub/memories', authenticateToken, (req, res) => {
     const { action = 'add', memory, memoryId } = req.body || {};
     if (action === 'delete' && memoryId) {
       db.memories = db.memories.filter((m) => m.id !== memoryId);

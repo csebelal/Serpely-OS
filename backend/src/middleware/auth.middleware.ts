@@ -2,6 +2,9 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'sincly-enterprise-jwt-super-secret-key-2026';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  console.warn('⚠️ [SECURITY WARNING]: JWT_SECRET is not set in environment variables! Using fallback secret is insecure in production.');
+}
 export const DEFAULT_ADMIN_EMAIL = 'support@serpely.com';
 
 export interface AuthenticatedUserPayload {
